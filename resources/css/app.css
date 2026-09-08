@@ -1,0 +1,85 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-serif: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
+    --font-sans: 'Plus Jakarta Sans', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+    --color-brand-primary: #5b4b38;
+    --color-brand-dark: #27221e;
+    --color-brand-muted: #786e66;
+    --color-brand-bg: #faf8f5;
+    --color-brand-card: #f5f0ea;
+}
+
+/* Custom Base & Utilities */
+:root {
+    --brand-taupe: #5b4b38;
+    --brand-taupe-hover: #483b2c;
+    --brand-dark: #27221e;
+    --brand-cream: #faf8f5;
+    --brand-card-bg: #f5f0ea;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #ffffff;
+    color: #27221e;
+    -webkit-font-smoothing: antialiased;
+}
+
+.font-serif-luxury {
+    font-family: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
+}
+
+/* Drawer Transitions */
+#drawer-menu {
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+}
+
+#drawer-backdrop {
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+#drawer-backdrop.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#drawer-backdrop.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+#drawer-menu.is-closed {
+    transform: translateX(-100%);
+}
+
+#drawer-menu.is-open {
+    transform: translateX(0);
+}
+
+/* Custom smooth scroll */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Luxury card image hover */
+.service-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.25rem;
+}
+
+.service-card img {
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.6s ease;
+}
+
+.service-card:hover img {
+    transform: scale(1.04);
+}
