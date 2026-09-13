@@ -281,6 +281,15 @@ function get_persistent_users_file() {
     return $dir . '/registered_users.json';
 }
 
+function verification_mail_is_configured(): bool {
+    $mailer = config('mail.default');
+    if ($mailer === 'log' || $mailer === 'array') {
+        return false;
+    }
+
+    return !empty(config('mail.from.address'));
+}
+
 function save_persistent_user(array $userData) {
     try {
         $file = get_persistent_users_file();
@@ -299,6 +308,7 @@ function save_persistent_user(array $userData) {
                 'password' => $userData['password'] ?? '',
                 'avatar' => $userData['avatar'] ?? 'images/default-avatar.svg',
                 'role' => $userData['role'] ?? 'user',
+                'email_verified_at' => $userData['email_verified_at'] ?? null,
                 'updated_at' => date('Y-m-d H:i:s')
             ];
             @file_put_contents($file, json_encode($users, JSON_PRETTY_PRINT));
@@ -354,7 +364,8 @@ Route::post('/login', function () {
                     'phone' => $backup['phone'] ?? '',
                     'password' => $backup['password'],
                     'avatar' => $backup['avatar'] ?? 'images/default-avatar.svg',
-                    'role' => $backup['role'] ?? 'user'
+                    'role' => $backup['role'] ?? 'user',
+                    'email_verified_at' => $backup['email_verified_at'] ?? null,
                 ]);
             } catch (\Throwable $e) {
                 $user = (object) $backup;
@@ -367,6 +378,14 @@ Route::post('/login', function () {
         return redirect()->route('login')
             ->with('error_message', 'Email belum terdaftar! Silakan registrasi akun terlebih dahulu.')
             ->with('unregistered_email', $email)
+            ->withInput();
+    }
+
+    $verifiedAt = is_object($user) ? ($user->email_verified_at ?? null) : ($user['email_verified_at'] ?? null);
+    if (!$verifiedAt) {
+        return redirect()->route('login')
+            ->with('error_message', 'Email Anda belum diverifikasi. Silakan buka link verifikasi yang dikirim ke email Anda.')
+            ->with('unverified_email', $email)
             ->withInput();
     }
 
@@ -441,10 +460,109 @@ Route::post('/login', function () {
     // Redirect to intended URL if saved (e.g. after being redirected from booking)
     $intended = session('url_intended');
     session()->forget('url_intended');
-    return redirect($intended ?? route('home'));
+    return redirect($intended ?? route('home'))
+        ->with('success_message', 'Selamat datang, ' . $userName . '!');
 });
 
-// Google Authentication Route (Auto-registers & reads from database for ANY Google account)
+// Google OAuth redirect. Identity must come from Google, never from browser-supplied email fields.
+Route::get('/auth/google', function () {
+    if (!config('services.google.client_id') || !config('services.google.client_secret')) {
+        return redirect()->route('login')->with('error_message', 'Google Login belum dikonfigurasi oleh administrator.');
+    }
+
+    return \Laravel\Socialite\Facades\Socialite::driver('google')->redirect();
+})->name('auth.google');
+
+Route::get('/auth/google/callback', function () {
+    try {
+        $googleUser = \Laravel\Socialite\Facades\Socialite::driver('google')->user();
+        $email = strtolower(trim($googleUser->getEmail() ?? ''));
+        if (!$email) {
+            return redirect()->route('login')->with('error_message', 'Google tidak mengembalikan alamat email yang valid.');
+        }
+
+        $user = User::updateOrCreate(
+            ['email' => $email],
+            [
+                'name' => $googleUser->getName() ?: 'Pengguna Google',
+                'password' => null,
+                'avatar' => $googleUser->getAvatar() ?: 'images/default-avatar.svg',
+                'role' => $email === 'admindreamday@gmail.com' ? 'admin' : 'user',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        session([
+            'is_logged_in' => true,
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'user_email' => $user->email,
+            'user_phone' => $user->phone ?? '',
+            'user_avatar' => $user->avatar ?: 'images/default-avatar.svg',
+            'user_bookings' => [],
+        ]);
+
+        if ($user->role === 'admin' || $user->email === 'admindreamday@gmail.com') {
+            session(['is_admin' => true, 'admin_name' => $user->name, 'admin_email' => $user->email]);
+        }
+
+        $intended = session('url_intended');
+        session()->forget('url_intended');
+        return redirect($intended ?? route('home'))->with('success_message', 'Selamat datang, ' . $user->name . '!');
+    } catch (\Throwable $e) {
+        report($e);
+        return redirect()->route('login')->with('error_message', 'Login Google gagal. Silakan coba kembali.');
+    }
+})->name('auth.google.callback');
+
+// Apple OAuth uses the same server-side identity flow as Google.
+Route::get('/auth/apple', function () {
+    if (!config('services.apple.client_id') || !config('services.apple.client_secret')) {
+        return redirect()->route('login')->with('error_message', 'Apple Login belum dikonfigurasi oleh administrator.');
+    }
+
+    return \Laravel\Socialite\Facades\Socialite::driver('apple')->scopes(['name', 'email'])->redirect();
+})->name('auth.apple');
+
+Route::get('/auth/apple/callback', function () {
+    try {
+        $appleUser = \Laravel\Socialite\Facades\Socialite::driver('apple')->user();
+        $email = strtolower(trim($appleUser->getEmail() ?? ''));
+        if (!$email) {
+            return redirect()->route('login')->with('error_message', 'Apple tidak mengembalikan alamat email yang valid.');
+        }
+
+        $user = User::updateOrCreate(
+            ['email' => $email],
+            [
+                'name' => $appleUser->getName() ?: 'Pengguna Apple',
+                'password' => null,
+                'avatar' => 'images/default-avatar.svg',
+                'role' => $email === 'admindreamday@gmail.com' ? 'admin' : 'user',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        session([
+            'is_logged_in' => true,
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'user_email' => $user->email,
+            'user_phone' => $user->phone ?? '',
+            'user_avatar' => $user->avatar ?: 'images/default-avatar.svg',
+            'user_bookings' => [],
+        ]);
+
+        $intended = session('url_intended');
+        session()->forget('url_intended');
+        return redirect($intended ?? route('home'))->with('success_message', 'Selamat datang, ' . $user->name . '!');
+    } catch (\Throwable $e) {
+        report($e);
+        return redirect()->route('login')->with('error_message', 'Login Apple gagal. Silakan coba kembali.');
+    }
+})->name('auth.apple.callback');
+
+/* Legacy browser-supplied authentication implementation retained below for reference.
 Route::match(['get', 'post'], '/auth/google', function () {
     $email = strtolower(trim(request('email', request('google_email', ''))));
     $name = trim(request('fullname', request('name', request('google_name', ''))));
@@ -535,6 +653,7 @@ Route::match(['get', 'post'], '/auth/google', function () {
 
     return redirect($intended ?? route('home'))->with('success_message', 'Selamat datang, ' . $userName . '!');
 })->name('auth.google');
+*/
 
 Route::get('/signup', function () {
     if (session('is_logged_in')) {
@@ -542,6 +661,67 @@ Route::get('/signup', function () {
     }
     return view('signup');
 })->name('signup');
+
+Route::get('/email/verify/{id}/{hash}', function (\Illuminate\Http\Request $request, $id, $hash) {
+    if (!$request->hasValidSignature()) {
+        abort(403, 'Link verifikasi tidak valid atau sudah kedaluwarsa.');
+    }
+
+    $user = User::findOrFail($id);
+    if (!hash_equals(sha1($user->getEmailForVerification()), (string) $hash)) {
+        abort(403, 'Link verifikasi tidak valid.');
+    }
+
+    if (!$user->hasVerifiedEmail()) {
+        $user->markEmailAsVerified();
+    }
+
+    save_persistent_user([
+        'id' => $user->id,
+        'name' => $user->name,
+        'email' => $user->email,
+        'phone' => $user->phone,
+        'password' => $user->getRawOriginal('password'),
+        'avatar' => $user->avatar,
+        'role' => $user->role,
+        'email_verified_at' => $user->email_verified_at,
+    ]);
+
+    return redirect()->route('login')->with('success_message', 'Email berhasil diverifikasi. Silakan masuk ke akun Anda.');
+})->middleware('signed')->name('verification.verify');
+
+Route::get('/email/verify', function () {
+    return redirect()->route('login')->with('success_message', 'Silakan buka link verifikasi yang dikirim ke email Anda.');
+})->name('verification.notice');
+
+Route::post('/email/verification-notification', function (\Illuminate\Http\Request $request) {
+    $email = strtolower(trim($request->input('email', '')));
+    $user = User::where('email', $email)->first();
+
+    if (!$user) {
+        return redirect()->route('login')->with('error_message', 'Email belum terdaftar.')->withInput();
+    }
+
+    if ($user->hasVerifiedEmail()) {
+        return redirect()->route('login')->with('success_message', 'Email sudah terverifikasi. Silakan login.');
+    }
+
+    if (!verification_mail_is_configured()) {
+        return redirect()->route('login')
+            ->with('error_message', 'Pengiriman email belum dikonfigurasi. Isi SMTP pada file .env terlebih dahulu.')
+            ->with('unverified_email', $user->email);
+    }
+
+    try {
+        $user->sendEmailVerificationNotification();
+        return redirect()->route('login')
+            ->with('success_message', 'Link verifikasi telah dikirim ulang ke ' . $user->email . '.')
+            ->with('unverified_email', $user->email);
+    } catch (\Throwable $e) {
+        report($e);
+        return redirect()->route('login')->with('error_message', 'Email verifikasi gagal dikirim. Periksa konfigurasi mail server.')->withInput();
+    }
+})->middleware('throttle:6,1')->name('verification.send');
 
 Route::post('/signup', function () {
     $name = trim(request('fullname')) ?: (request('email') ? ucwords(str_replace(['.', '_', '-'], ' ', explode('@', request('email'))[0])) : 'Pengguna');
@@ -558,6 +738,66 @@ Route::post('/signup', function () {
     if ($passwordConfirm && $password !== $passwordConfirm) {
         return redirect()->route('signup')->with('error_message', 'Konfirmasi password tidak cocok. Silakan periksa kembali.')->withInput();
     }
+
+    $validator = \Illuminate\Support\Facades\Validator::make(
+        ['name' => $name, 'email' => $email, 'password' => $password],
+        [
+            'name' => ['required', 'string', 'max:120'],
+            'email' => ['required', 'email:rfc', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8'],
+        ]
+    );
+
+    if ($validator->fails()) {
+        return redirect()->route('signup')
+            ->with('error_message', $validator->errors()->first())
+            ->withInput();
+    }
+
+    $domain = substr(strrchr($email, '@'), 1);
+    if (!$domain || (!checkdnsrr($domain, 'MX') && !checkdnsrr($domain, 'A') && !checkdnsrr($domain, 'AAAA'))) {
+        return redirect()->route('signup')
+            ->with('error_message', 'Domain email tidak ditemukan. Gunakan alamat email yang aktif.')
+            ->withInput();
+    }
+
+    try {
+        $user = User::create([
+            'name' => $name,
+            'email' => $email,
+            'phone' => $phone,
+            'password' => $password,
+            'avatar' => 'images/default-avatar.svg',
+            'role' => 'user',
+        ]);
+
+        if (!verification_mail_is_configured()) {
+            $user->delete();
+            return redirect()->route('signup')
+                ->with('error_message', 'Registrasi belum dapat diselesaikan karena SMTP email belum dikonfigurasi.')
+                ->withInput();
+        }
+
+        $user->sendEmailVerificationNotification();
+    } catch (\Throwable $e) {
+        report($e);
+        return redirect()->route('signup')
+            ->with('error_message', 'Registrasi gagal. Silakan periksa data dan coba kembali.')
+            ->withInput();
+    }
+
+    save_persistent_user([
+        'id' => $user->id,
+        'name' => $user->name,
+        'email' => $user->email,
+        'phone' => $user->phone,
+        'password' => $user->getRawOriginal('password'),
+        'avatar' => $user->avatar,
+        'role' => $user->role,
+        'email_verified_at' => null,
+    ]);
+
+    return redirect()->route('signup')->with('success_message', 'Registrasi berhasil. Buka email Anda dan klik link verifikasi sebelum login.');
 
     $user = null;
     try {

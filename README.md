@@ -21,6 +21,39 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## Authentication setup
+
+Regular signup requires opening an email verification link. Configure a real SMTP or email API mailer in `.env`. The application refuses to claim that a verification email was sent while the mailer is still `log` or `array`.
+
+For Gmail, create a Google App Password and fill these values. Do not use the normal Gmail password:
+
+```
+MAIL_MAILER=smtp
+MAIL_SCHEME=tls
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-16-character-app-password
+MAIL_FROM_ADDRESS=your-email@gmail.com
+MAIL_FROM_NAME="DreamDay Studio"
+```
+
+After editing `.env`, run `php artisan config:clear`. The email will then be sent synchronously when registration or “Kirim Ulang Link Verifikasi” is submitted.
+
+Configure OAuth credentials and register these callback URLs in Google Cloud Console and Apple Developer:
+
+```
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
+
+APPLE_CLIENT_ID=
+APPLE_CLIENT_SECRET=
+APPLE_REDIRECT_URI=http://127.0.0.1:8000/auth/apple/callback
+```
+
+After changing `.env`, run `php artisan config:clear`.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.

@@ -24,6 +24,8 @@
 </head>
 <body class="bg-[#f9f8f6] text-[#27221e] font-sans-modern antialiased selection:bg-[#5b4b38] selection:text-white min-h-screen flex flex-col justify-between">
 
+    @include('partials.login-success-toast')
+
     <!-- ==================== HEADER / NAVIGATION BAR ==================== -->
     <header class="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-[#f0ebe4] transition-all duration-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">

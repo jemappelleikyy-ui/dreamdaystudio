@@ -546,7 +546,8 @@
                                             <!-- Prominent Action 2: Verify DP Payment -->
                                             <div>
                                                 <button type="button" 
-                                                        onclick="openVerificationModal({{ json_encode($booking) }})" 
+                                                         onclick="openVerificationModal(this)" 
+                                                        data-booking="{!! htmlspecialchars(json_encode($booking), ENT_QUOTES, 'UTF-8') !!}"
                                                         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs transition cursor-pointer animate-pulse">
                                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -558,7 +559,8 @@
 
                                         <div>
                                             <button type="button" 
-                                                    onclick="openVerificationModal({{ json_encode($booking) }})" 
+                                                    onclick="openVerificationModal(this)" 
+                                                    data-booking="{!! htmlspecialchars(json_encode($booking), ENT_QUOTES, 'UTF-8') !!}"
                                                     class="inline-flex items-center gap-1 px-3 py-1 rounded-lg border border-[#ded5cb] hover:bg-[#faf7f2] text-[#5b4b38] text-xs font-semibold transition cursor-pointer">
                                                 <span>Detail &amp; Kelola</span>
                                             </button>
@@ -607,7 +609,7 @@
 
 
     <!-- ==================== MODAL: TAMBAH KATEGORI BARU ==================== -->
-    <div id="modal-add-category" class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-add-category" class="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-lg w-full p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -669,7 +671,7 @@
     </div>
 
     <!-- ==================== MODAL: EDIT KATEGORI ==================== -->
-    <div id="modal-edit-category" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-edit-category" class="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-lg w-full p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -743,7 +745,7 @@
     </div>
 
     <!-- ==================== MODAL: KONFIRMASI HAPUS KATEGORI ==================== -->
-    <div id="modal-delete-category" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-delete-category" class="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-6 text-center">
             
             <div class="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 shadow-xs">
@@ -1462,22 +1464,22 @@
         <!-- 1. Drawer Header -->
         <div class="p-5 sm:p-6 border-b border-[#f2ece5] bg-[#faf8f5] sticky top-0 z-20 space-y-3">
             <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 min-w-0">
                     <div class="w-10 h-10 rounded-2xl bg-[#5b4b38] text-white flex items-center justify-center shadow-xs shrink-0">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                         </svg>
                     </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h3 class="font-serif-luxury text-lg sm:text-xl font-bold text-[#27221e]">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h3 class="font-serif-luxury text-base sm:text-lg font-bold text-[#27221e] whitespace-nowrap">
                                 Kategori &amp; Katalog Produk
                             </h3>
-                            <span class="text-xs font-bold text-[#8d8277] bg-[#eee6dc] px-2.5 py-0.5 rounded-full">
+                            <span class="text-xs font-bold text-[#8d8277] bg-[#eee6dc] px-2.5 py-0.5 rounded-full shrink-0">
                                 {{ count($categories) }} Kategori
                             </span>
                         </div>
-                        <p class="text-xs text-[#8d8277]">
+                        <p class="text-xs text-[#8d8277] mt-0.5 hidden sm:block leading-relaxed">
                             Kelola kategori, paket layanan, dan daftar harga produk DreamDay Studio.
                         </p>
                     </div>
@@ -1486,14 +1488,19 @@
                 <div class="flex items-center gap-2 shrink-0">
                     <button type="button" 
                             onclick="openAddCategoryModal()" 
-                            class="px-4 py-2 rounded-xl bg-[#5b4b38] hover:bg-[#483b2c] text-white font-bold text-xs shadow-xs transition duration-200 cursor-pointer flex items-center gap-1.5">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            class="px-3 sm:px-4 py-2 rounded-xl bg-[#5b4b38] hover:bg-[#483b2c] text-white font-bold text-xs shadow-xs transition duration-200 cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                         </svg>
-                        <span>+ Tambah Kategori</span>
+                        <span class="hidden sm:inline">+ Tambah Kategori</span>
+                        <span class="sm:hidden">+Kategori</span>
                     </button>
-                    <button type="button" onclick="toggleCategoriesDrawer()" class="p-2 rounded-xl text-[#8d8277] hover:text-[#27221e] hover:bg-[#ede7df] cursor-pointer transition">
-                        ✕
+                    <button type="button" onclick="toggleCategoriesDrawer()" 
+                            title="Tutup"
+                            class="p-2 rounded-xl text-[#8d8277] hover:text-[#27221e] hover:bg-[#ede7df] cursor-pointer transition shrink-0">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -1541,12 +1548,14 @@
 
                                 <div class="flex items-center gap-1" onclick="event.stopPropagation()">
                                     <button type="button" 
-                                            onclick="openEditCategoryModal({{ json_encode($cat) }})" 
+                                            onclick="openEditCategoryModal(this)" 
+                                            data-cat="{!! htmlspecialchars(json_encode($cat), ENT_QUOTES, 'UTF-8') !!}"
                                             title="Edit Kategori"
-                                            class="p-1.5 rounded-lg border border-[#ded5cb] hover:border-[#5b4b38] hover:bg-[#faf7f2] text-xs text-[#5b4b38] transition cursor-pointer">
+                                            class="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-[#ded5cb] hover:border-[#5b4b38] hover:bg-[#faf7f2] text-xs font-semibold text-[#5b4b38] transition cursor-pointer">
                                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                         </svg>
+                                        <span class="hidden sm:inline">Edit</span>
                                     </button>
                                     <button type="button" 
                                             onclick="openDeleteCategoryModal({{ $cat->id }}, '{{ addslashes($cat->name) }}', {{ $prodCount }}, {{ $bCount }})" 
@@ -1640,7 +1649,8 @@
 
                             <div class="pt-2.5 border-t border-[#f2ece5] flex items-center justify-between gap-2">
                                 <button type="button" 
-                                        onclick="openEditServiceModal({{ json_encode($srv) }})" 
+                                        onclick="openEditServiceModal(this)" 
+                                        data-srv="{!! htmlspecialchars(json_encode($srv), ENT_QUOTES, 'UTF-8') !!}"
                                         class="flex-1 py-1.5 px-2.5 rounded-xl bg-[#faf7f2] hover:bg-[#5b4b38] text-[#5b4b38] hover:text-white border border-[#ded5cb] hover:border-[#5b4b38] text-xs font-bold transition duration-200 cursor-pointer flex items-center justify-center gap-1">
                                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -2300,7 +2310,8 @@
             document.getElementById('modal-add-category').classList.add('hidden');
         }
 
-        function openEditCategoryModal(cat) {
+        function openEditCategoryModal(btn) {
+            const cat = JSON.parse(btn.getAttribute('data-cat'));
             document.getElementById('edit_cat_name').value = cat.name;
             document.getElementById('edit_cat_desc').value = cat.description || '';
             document.getElementById('edit_cat_preview').src = '/' + (cat.image || 'images/service-venue.jpg').replace(/^\/+/, '');
@@ -2357,7 +2368,8 @@
             document.getElementById('modal-add-service').classList.add('hidden');
         }
 
-        function openEditServiceModal(srv) {
+        function openEditServiceModal(btn) {
+            const srv = JSON.parse(btn.getAttribute('data-srv'));
             document.getElementById('edit_srv_title').value = srv.title;
             document.getElementById('edit_srv_category').value = srv.category;
             document.getElementById('edit_srv_price').value = srv.price;
@@ -2475,7 +2487,8 @@
             rejectBooking(currentActiveBooking.id);
         }
 
-        function openVerificationModal(booking) {
+        function openVerificationModal(btn) {
+            const booking = JSON.parse(btn.getAttribute('data-booking'));
             currentActiveBooking = booking;
             document.getElementById('modal-booking-id').textContent = '#' + booking.id;
             document.getElementById('form-modal-booking-id').value = booking.id;

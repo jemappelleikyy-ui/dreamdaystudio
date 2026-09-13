@@ -26,6 +26,8 @@
 </head>
 <body class="bg-white text-[#27221e] font-sans-modern antialiased selection:bg-[#5b4b38] selection:text-white">
 
+    @include('partials.login-success-toast')
+
     @include('partials.preloader')
 
     <!-- ==================== HEADER / NAVIGATION BAR ==================== -->
