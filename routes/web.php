@@ -177,7 +177,7 @@ function format_booking_dp_data($b) {
     $expiresAtStr = $arr['expires_at'] ?? null;
     $isExpired = false;
     $timeLeftSeconds = 0;
-    $timeLeftFormatted = '00:00:00';
+    $timeLeftFormatted = '0 Hari';
     $expiresAtFormatted = null;
 
     // For active confirmed bookings waiting for DP, ensure they have a valid 7-day expiry
@@ -201,22 +201,18 @@ function format_booking_dp_data($b) {
             if ($now->greaterThanOrEqualTo($expiresAt)) {
                 $isExpired = true;
                 $timeLeftSeconds = 0;
-                $timeLeftFormatted = '00:00:00';
+                $timeLeftFormatted = '0 Hari';
                 if (!in_array($paymentStatus, ['DP Dibayar', 'Menunggu Verifikasi', 'Lunas'])) {
                     $status = 'Dibatalkan';
                     $paymentStatus = 'Kadaluarsa';
                 }
             } else {
                 $timeLeftSeconds = $now->diffInSeconds($expiresAt, false);
-                $days = floor($timeLeftSeconds / 86400);
-                $hours = floor(($timeLeftSeconds % 86400) / 3600);
-                $minutes = floor(($timeLeftSeconds % 3600) / 60);
-                $seconds = $timeLeftSeconds % 60;
-                if ($days > 0) {
-                    $timeLeftFormatted = sprintf('%d Hari %02d:%02d:%02d', $days, $hours, $minutes, $seconds);
-                } else {
-                    $timeLeftFormatted = sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+                $days = (int) ceil($timeLeftSeconds / 86400);
+                if ($days < 1) {
+                    $days = 1;
                 }
+                $timeLeftFormatted = $days . ' Hari';
             }
         } catch (\Throwable $e) {}
     }

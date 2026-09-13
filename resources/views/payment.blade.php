@@ -225,7 +225,7 @@
 
                             <div class="space-y-1.5 text-xs text-[#685f58]">
                                 <p class="font-bold text-[#27221e]">Nominal Tagihan: <span class="text-[#5b4b38]">Rp {{ number_format($targetAmount, 0, ',', '.') }}</span></p>
-                                <p class="text-[0.7rem] text-[#8d8277]">Batas Waktu Pembayaran: <span id="countdown-timer" class="font-mono font-bold text-rose-600">23:59:59</span></p>
+                                <p class="text-[0.7rem] text-[#8d8277]">Batas Waktu Pembayaran: <span id="countdown-timer" class="font-mono font-bold text-rose-600">7 Hari</span></p>
                                 
                                 <!-- Tombol Perbarui Kode -->
                                 <div id="renew-qris-box" class="hidden pt-2">
@@ -514,7 +514,7 @@
             const renewBox = document.getElementById('renew-qris-box');
 
             if (remainingMs <= 0) {
-                if (timerEl) timerEl.textContent = '00:00:00 (Kadaluarsa)';
+                if (timerEl) timerEl.textContent = '0 Hari (Kadaluarsa)';
                 if (overlayEl) overlayEl.classList.remove('hidden');
                 if (renewBox) renewBox.classList.remove('hidden');
                 if (countdownTimerInterval) clearInterval(countdownTimerInterval);
@@ -526,17 +526,10 @@
             if (renewBox) renewBox.classList.add('hidden');
 
             const totalSeconds = Math.floor(remainingMs / 1000);
-            const days = Math.floor(totalSeconds / 86400);
-            const hours = String(Math.floor((totalSeconds % 86400) / 3600)).padStart(2, '0');
-            const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
-            const seconds = String(totalSeconds % 60).padStart(2, '0');
+            const days = Math.max(1, Math.ceil(totalSeconds / 86400));
 
             if (timerEl) {
-                if (days > 0) {
-                    timerEl.textContent = `${days} Hari ${hours}:${minutes}:${seconds}`;
-                } else {
-                    timerEl.textContent = `${hours}:${minutes}:${seconds}`;
-                }
+                timerEl.textContent = `${days} Hari`;
             }
         }
 

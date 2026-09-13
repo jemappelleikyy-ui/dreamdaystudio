@@ -607,7 +607,7 @@
 
 
     <!-- ==================== MODAL: TAMBAH KATEGORI BARU ==================== -->
-    <div id="modal-add-category" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-add-category" class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-lg w-full p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -1140,6 +1140,12 @@
                         <span class="text-[#8d8277]">Jumlah Tamu:</span>
                         <div class="font-semibold" id="modal-guest-count">-</div>
                     </div>
+                </div>
+
+                <!-- Special Requests / Notes -->
+                <div class="p-4 rounded-2xl border border-[#ede7df] space-y-1.5">
+                    <span class="text-[0.7rem] uppercase font-bold text-[#8d8277] block">Catatan / Permintaan Khusus Acara:</span>
+                    <p id="modal-booking-notes" class="text-[#554d46] whitespace-pre-wrap">-</p>
                 </div>
 
                 <!-- Quick Action Buttons -->
@@ -2494,6 +2500,7 @@
             document.getElementById('modal-event-time').textContent = booking.event_time || '-';
             document.getElementById('modal-event-location').textContent = booking.event_location || '-';
             document.getElementById('modal-guest-count').textContent = booking.guest_count || '-';
+            document.getElementById('modal-booking-notes').textContent = booking.notes || '-';
             document.getElementById('select-status').value = booking.status;
 
             // Handle Expiry Display

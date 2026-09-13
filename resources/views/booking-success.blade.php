@@ -170,6 +170,12 @@
                 </div>
             </div>
 
+            <!-- Special Requests / Notes -->
+            <div class="pt-4 border-t border-[#f2ece5] space-y-1.5">
+                <h4 class="text-[0.7rem] font-bold uppercase tracking-wider text-[#8d8277]">Catatan / Permintaan Khusus Acara</h4>
+                <p class="text-xs text-[#554d46] whitespace-pre-wrap">{{ $booking['notes'] ?? '-' }}</p>
+            </div>
+
             <!-- Service Item Details -->
             <div class="space-y-3 pt-4 border-t border-[#f2ece5]">
                 <h4 class="text-[0.7rem] font-bold uppercase tracking-wider text-[#8d8277]">Rincian Layanan</h4>

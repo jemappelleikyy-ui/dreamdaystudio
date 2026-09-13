@@ -160,15 +160,6 @@
                 <span>MUA (Make-up)</span>
             </a>
 
-            <!-- Chat Admin -->
-            <a href="{{ route('chat') }}" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-[#27221e] hover:text-[#5b4b38] hover:bg-[#faf7f2] font-medium text-base transition-colors group">
-                <span class="p-1.5 rounded-lg bg-[#f5f0ea] group-hover:bg-[#ebe2d6] text-[#5b4b38] transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                    </svg>
-                </span>
-                <span>Chat Admin</span>
-            </a>
         </nav>
  
         <!-- Drawer Footer -->
@@ -332,17 +323,6 @@
                     <button type="button" id="reset-search-btn" class="px-3.5 py-2 rounded-xl text-xs font-semibold text-[#8d8277] hover:text-[#27221e] hover:bg-[#f0ebe4] transition cursor-pointer">
                         ✕ Reset
                     </button>
-                </div>
-            </div>
-
-            <!-- Matched Categories Showcase Cards (Appears when location or category is searched) -->
-            <div id="matched-categories-container" class="mt-8">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 id="matched-categories-title" class="text-xs font-bold uppercase tracking-widest text-[#8d8277]">Kategori yang Tersedia</h3>
-                    <span id="matched-categories-badge" class="text-xs font-semibold text-[#5b4b38] bg-[#f5f0ea] px-2.5 py-1 rounded-full">3 Kategori Ditemukan</span>
-                </div>
-                <div id="matched-categories-grid" class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <!-- Dynamic Category Cards Inserted Here -->
                 </div>
             </div>
 
@@ -544,8 +524,10 @@
                         COMPANY
                     </h4>
                     <ul class="space-y-2.5 text-sm text-[#554d46]">
+                        <li><a href="https://wa.me/628138897031" target="_blank" rel="noopener noreferrer" class="hover:text-[#5b4b38] transition-colors">Contact Us</a></li>
                         <li><a href="#about" class="hover:text-[#5b4b38] transition-colors">About Us</a></li>
                         <li><a href="#careers" class="hover:text-[#5b4b38] transition-colors">Careers</a></li>
+                        <li><a href="https://www.instagram.com/dream_daystudioid?stkn=MXE0azVxMTRvcG96ZA==" target="_blank" rel="noopener noreferrer" class="hover:text-[#5b4b38] transition-colors">Media Social</a></li>
                     </ul>
                 </div>
 
@@ -714,20 +696,14 @@
                 }
 
                 const titleMatch = service.title.toLowerCase().includes(lowerQ);
-                const descMatch = service.description.toLowerCase().includes(lowerQ);
-                const locMatch = service.location.toLowerCase().includes(lowerQ);
-                const catLabelMatch = service.category_label.toLowerCase().includes(lowerQ) || service.category.toLowerCase().includes(lowerQ);
                 
                 // If query is specifically a category keyword
                 if (matchedCatKey) {
                     if (service.category_group === matchedCatKey) return true;
                 }
 
-                // If query is a location keyword (or synonym)
-                if (locMatch) return true;
-
-                // Title or description match
-                if (titleMatch || descMatch || catLabelMatch) return true;
+                // Only service names are searchable by free-text keywords.
+                if (titleMatch) return true;
 
                 return false;
             });
@@ -896,7 +872,7 @@
                 const cardHtml = `
                     <div class="bg-white rounded-2xl border border-[#ece5dc] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between group">
                         <div>
-                            <div class="relative aspect-[4/3] overflow-hidden bg-[#f5f0ea]">
+                            <div class="relative h-60 sm:h-64 overflow-hidden bg-[#f5f0ea]">
                                 <img src="${service.image}" alt="${service.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
                                 
                                 <div class="absolute top-3 left-3 flex flex-wrap gap-1.5">

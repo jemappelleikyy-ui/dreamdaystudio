@@ -303,22 +303,31 @@
             <div class="md:col-span-7 lg:col-span-7 space-y-4">
                 
                 <!-- Section Header -->
-                <div class="flex items-center justify-between px-1">
+                <div id="booking-history-header" class="flex items-center justify-between px-1">
                     <div>
                         <h2 class="font-serif-luxury text-2xl sm:text-3xl font-bold text-[#27221e] tracking-tight">
                             Booking History
                         </h2>
                         <p class="text-xs text-[#8d8277]">Pantau status konfirmasi &amp; pembayaran DP reservasi Anda</p>
                     </div>
-                    <button type="button" 
-                            id="view-all-btn" 
-                            class="text-xs sm:text-sm font-semibold text-[#8d8277] hover:text-[#5b4b38] transition-colors cursor-pointer">
-                        View All
-                    </button>
+                    @php
+                        $userBookingsList = !empty($userBookings) ? $userBookings : session('user_bookings', []);
+                    @endphp
+                    @if(!empty($userBookingsList) && count($userBookingsList) > 0)
+                        <button type="button" 
+                                id="view-toggle-btn" 
+                                onclick="toggleBookingsView()"
+                                class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#5b4b38] hover:text-[#27221e] bg-[#faf7f2] hover:bg-[#ede7df] border border-[#ded5cb] px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer shadow-2xs">
+                            <span id="view-toggle-text">{{ count($userBookingsList) > 1 ? 'View All (' . count($userBookingsList) . ')' : 'View Less' }}</span>
+                            <svg id="view-toggle-icon" class="w-3.5 h-3.5 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="{{ count($userBookingsList) > 1 ? 'M19 9l-7 7-7-7' : 'M5 15l7-7 7 7' }}" />
+                            </svg>
+                        </button>
+                    @endif
                 </div>
 
                 <!-- Booking History List Card -->
-                <div class="bg-white border border-[#ede7df] rounded-2xl shadow-xs overflow-hidden divide-y divide-[#f2ece5]">
+                <div id="booking-history-container" class="bg-white border border-[#ede7df] rounded-2xl shadow-xs overflow-hidden divide-y divide-[#f2ece5]">
                     
                     @php
                         $userBookingsList = !empty($userBookings) ? $userBookings : session('user_bookings', []);
@@ -372,13 +381,13 @@
                                     default => 'text-gray-700 bg-gray-100 border-gray-200'
                                 };
                             @endphp
-                            <div id="booking-card-{{ $bk['id'] }}" class="p-5 sm:p-6 flex flex-col gap-4 {{ $isNew ? 'bg-[#faf7f2] border-2 border-[#5b4b38] rounded-2xl shadow-xs my-1' : 'hover:bg-[#fcfaf7]' }} transition-all duration-300 group">
+                            <div id="booking-card-{{ $bk['id'] }}" class="booking-card-item {{ $loop->index > 0 ? 'booking-extra-item hidden' : 'primary-booking-item' }} p-5 sm:p-6 flex flex-col gap-4 {{ $isNew ? 'bg-[#faf7f2] border-2 border-[#5b4b38] rounded-2xl shadow-xs my-1' : 'hover:bg-[#fcfaf7]' }} transition-all duration-300 group">
                                 
                                 <!-- 1. Top Card Bar: ID, Date Created, & Dual Status Badges -->
                                 <div class="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-[#f2ece5]">
                                     <div class="flex items-center gap-2 flex-wrap">
                                         <span class="text-xs font-mono font-bold text-[#5b4b38] bg-[#f5f0ea] px-2.5 py-1 rounded-lg border border-[#e8dfd3]">
-                                            #{{ $bk['id'] }}
+                                             #{{ $bk['id'] }}
                                         </span>
                                         @if($isNew)
                                             <span class="text-[0.65rem] font-bold text-white bg-emerald-700 px-2.5 py-0.5 rounded-full shadow-2xs">
@@ -407,111 +416,128 @@
                                     </div>
                                 </div>
 
-                                <!-- 2. Main Item Content: Image + Details + Price Breakdown -->
-                                <div class="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
-                                    <img src="{{ asset($bk['service_image'] ?? 'images/package-cliffside.jpg') }}" 
-                                         alt="{{ $bk['service_title'] }}" 
-                                         class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border border-[#ede7df] shadow-xs shrink-0 group-hover:scale-102 transition-transform duration-300">
-                                    
-                                    <div class="space-y-2 flex-1 min-w-0">
-                                        <div>
-                                            <h3 class="font-bold text-base sm:text-lg text-[#27221e] group-hover:text-[#5b4b38] transition-colors leading-snug">
-                                                {{ $bk['service_title'] }}
-                                            </h3>
-                                            <p class="text-xs text-[#8d8277] mt-0.5">
-                                                Acara: <strong class="text-[#27221e]">{{ !empty($bk['event_date']) ? date('d M Y', strtotime($bk['event_date'])) : '-' }}</strong> • {{ $bk['event_location'] ?? 'Lokasi Terdaftar' }}
-                                            </p>
-                                        </div>
+                                <!-- Collapsible Card Body (View Less / View All) -->
+                                <div id="booking-body-{{ $bk['id'] }}" class="booking-card-body space-y-4">
+                                    <!-- 2. Main Item Content: Image + Details + Price Breakdown -->
+                                    <div class="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
+                                        <img src="{{ asset($bk['service_image'] ?? 'images/package-cliffside.jpg') }}" 
+                                             alt="{{ $bk['service_title'] }}" 
+                                             class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border border-[#ede7df] shadow-xs shrink-0 group-hover:scale-102 transition-transform duration-300">
+                                        
+                                        <div class="space-y-2 flex-1 min-w-0">
+                                            <div>
+                                                <h3 class="font-bold text-base sm:text-lg text-[#27221e] group-hover:text-[#5b4b38] transition-colors leading-snug">
+                                                    {{ $bk['service_title'] }}
+                                                </h3>
+                                                <p class="text-xs text-[#8d8277] mt-0.5">
+                                                    Acara: <strong class="text-[#27221e]">{{ !empty($bk['event_date']) ? date('d M Y', strtotime($bk['event_date'])) : '-' }}</strong> • {{ $bk['event_location'] ?? 'Lokasi Terdaftar' }}
+                                                </p>
+                                            </div>
 
-                                        <!-- Price Breakdown Strip -->
-                                        <div class="p-2.5 rounded-xl bg-[#faf7f2] border border-[#ede7df] flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[#554d46]">
-                                            <div>
-                                                <span class="text-[#8d8277]">Total Biaya:</span>
-                                                <strong class="text-[#27221e] ml-1">Rp {{ number_format($total, 0, ',', '.') }}</strong>
-                                            </div>
-                                            <span class="text-[#ded5cb] hidden sm:inline">•</span>
-                                            <div>
-                                                <span class="text-[#8d8277]">DP ({{ $dpPct }}%):</span>
-                                                <strong class="text-[#5b4b38] ml-1">Rp {{ number_format($dpAmount, 0, ',', '.') }}</strong>
-                                            </div>
-                                            <span class="text-[#ded5cb] hidden sm:inline">•</span>
-                                            <div>
-                                                <span class="text-[#8d8277]">Sisa Pelunasan:</span>
-                                                <strong class="{{ $remainingDisplay == 0 ? 'text-emerald-700' : 'text-[#7d6f63]' }} ml-1">Rp {{ number_format($remainingDisplay, 0, ',', '.') }}</strong>
+                                            <!-- Price Breakdown Strip -->
+                                            <div class="p-2.5 rounded-xl bg-[#faf7f2] border border-[#ede7df] flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[#554d46]">
+                                                <div>
+                                                    <span class="text-[#8d8277]">Total Biaya:</span>
+                                                    <strong class="text-[#27221e] ml-1">Rp {{ number_format($total, 0, ',', '.') }}</strong>
+                                                </div>
+                                                <span class="text-[#ded5cb] hidden sm:inline">•</span>
+                                                <div>
+                                                    <span class="text-[#8d8277]">DP ({{ $dpPct }}%):</span>
+                                                    <strong class="text-[#5b4b38] ml-1">Rp {{ number_format($dpAmount, 0, ',', '.') }}</strong>
+                                                </div>
+                                                <span class="text-[#ded5cb] hidden sm:inline">•</span>
+                                                <div>
+                                                    <span class="text-[#8d8277]">Sisa Pelunasan:</span>
+                                                    <strong class="{{ $remainingDisplay == 0 ? 'text-emerald-700' : 'text-[#7d6f63]' }} ml-1">Rp {{ number_format($remainingDisplay, 0, ',', '.') }}</strong>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <!-- 3. Status Alert Banner (Full-Width) -->
-                                <div>
-                                    @if($isWaitingAdmin)
-                                        <div class="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-900 text-xs flex items-center gap-3 shadow-2xs">
-                                            <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span class="leading-relaxed">Booking Anda berhasil dikirim dan <strong>sedang menunggu konfirmasi admin</strong>. Akses pembayaran DP akan otomatis dibuka setelah disetujui.</span>
-                                        </div>
-                                    @elseif($isConfirmed && $isWaitingDP)
-                                        <div class="p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 text-[#5b4b38] text-xs flex items-center justify-between flex-wrap gap-2.5 shadow-2xs">
-                                            <div class="flex items-center gap-2.5">
-                                                <span class="text-lg shrink-0 animate-pulse">⏳</span>
-                                                <span class="leading-relaxed">Booking telah dikonfirmasi! Segera selesaikan pembayaran DP dalam <strong>7 Hari</strong> untuk mengunci jadwal venue.</span>
+                                    <!-- 3. Status Alert Banner (Full-Width) -->
+                                    <div>
+                                        @if($isWaitingAdmin)
+                                            <div class="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-900 text-xs flex items-center gap-3 shadow-2xs">
+                                                <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span class="leading-relaxed">Booking Anda berhasil dikirim dan <strong>sedang menunggu konfirmasi admin</strong>. Akses pembayaran DP akan otomatis dibuka setelah disetujui.</span>
                                             </div>
-                                            @if(!empty($bk['time_left_formatted']) && empty($bk['is_expired']))
-                                                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-rose-700 font-mono font-bold text-xs shrink-0 shadow-2xs">
-                                                    <span>Sisa Waktu:</span>
-                                                    <span>{{ $bk['time_left_formatted'] }}</span>
+                                        @elseif($isConfirmed && $isWaitingDP)
+                                            <div class="p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 text-[#5b4b38] text-xs flex items-center justify-between flex-wrap gap-2.5 shadow-2xs">
+                                                <div class="flex items-center gap-2.5">
+                                                    <span class="text-lg shrink-0 animate-pulse">⏳</span>
+                                                    <span class="leading-relaxed">Booking telah dikonfirmasi! Segera selesaikan pembayaran DP dalam <strong>7 Hari</strong> untuk mengunci jadwal venue.</span>
                                                 </div>
-                                            @endif
-                                        </div>
-                                    @elseif($isWaitingVerify)
-                                        <div class="p-3.5 rounded-xl bg-indigo-50/90 border border-indigo-200/90 text-indigo-900 text-xs flex items-center gap-3 shadow-2xs">
-                                            <svg class="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span class="leading-relaxed">Bukti transfer DP telah dikirimkan &amp; <strong>sedang diverifikasi</strong> oleh tim keuangan DreamDay Studio.</span>
-                                        </div>
-                                    @elseif($isBookingActive || $isDPPaid)
-                                        <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-3 shadow-2xs">
-                                            <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                            <span class="leading-relaxed">Pembayaran DP berhasil diterima! <strong>Jadwal venue telah resmi dikunci &amp; reservasi aktif</strong>.</span>
-                                        </div>
-                                    @elseif($isExpired)
-                                        <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-3 shadow-2xs">
-                                            <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span class="leading-relaxed">Batas waktu pembayaran DP 7 hari telah berakhir. Booking telah dibatalkan &amp; jadwal kembali tersedia.</span>
-                                        </div>
-                                    @endif
-                                </div>
-
-                                <!-- 4. Action CTA Buttons Row -->
-                                <div class="pt-2 border-t border-[#f2ece5] flex items-center justify-end gap-2.5">
-                                    @if($isConfirmed && $isWaitingDP)
-                                        <a href="{{ route('booking.payment', ['id' => $bk['id']]) }}" class="px-5 py-2.5 rounded-xl bg-[#5b4b38] hover:bg-[#483b2c] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer flex items-center gap-2">
-                                            <span>BAYAR DP SEKARANG</span>
-                                            <span class="text-sm">→</span>
-                                        </a>
-                                    @elseif($isBookingActive || $isDPPaid)
-                                        @if($remainingDisplay > 0)
-                                            <a href="{{ route('booking.payment', ['id' => $bk['id'], 'type' => 'pelunasan']) }}" class="px-4 py-2.5 rounded-xl bg-[#5b4b38] hover:bg-[#483b2c] text-white text-xs font-bold shadow-2xs hover:shadow transition cursor-pointer flex items-center gap-1.5">
-                                                <span>Bayar Pelunasan (Rp {{ number_format($remainingDisplay, 0, ',', '.') }})</span>
-                                                <span>→</span>
-                                            </a>
+                                                @if(!empty($bk['time_left_formatted']) && empty($bk['is_expired']))
+                                                    <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-rose-700 font-mono font-bold text-xs shrink-0 shadow-2xs">
+                                                        <span>Sisa Waktu:</span>
+                                                        <span>{{ $bk['time_left_formatted'] }}</span>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        @elseif($isWaitingVerify)
+                                            <div class="p-3.5 rounded-xl bg-indigo-50/90 border border-indigo-200/90 text-indigo-900 text-xs flex items-center gap-3 shadow-2xs">
+                                                <svg class="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span class="leading-relaxed">Bukti transfer DP telah dikirimkan &amp; <strong>sedang diverifikasi</strong> oleh tim keuangan DreamDay Studio.</span>
+                                            </div>
+                                        @elseif($isBookingActive || $isDPPaid)
+                                            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-3 shadow-2xs">
+                                                <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <span class="leading-relaxed">Pembayaran DP berhasil diterima! <strong>Jadwal venue telah resmi dikunci &amp; reservasi aktif</strong>.</span>
+                                            </div>
+                                        @elseif($isExpired)
+                                            <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-3 shadow-2xs">
+                                                <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span class="leading-relaxed">Batas waktu pembayaran DP 7 hari telah berakhir. Booking telah dibatalkan &amp; jadwal kembali tersedia.</span>
+                                            </div>
                                         @endif
-                                    @endif
+                                    </div>
 
-                                    <a href="{{ route('booking.success', ['id' => $bk['id']]) }}" class="px-4 py-2.5 rounded-xl border border-[#ded5cb] hover:border-[#5b4b38] hover:bg-[#faf7f2] text-xs font-semibold text-[#5b4b38] hover:text-[#27221e] bg-white transition shadow-2xs">
-                                        Lihat Detail / Invoice
-                                    </a>
+                                    <!-- 4. Action CTA Buttons Row -->
+                                    <div class="pt-2 border-t border-[#f2ece5] flex items-center justify-end gap-2.5">
+                                        @if($isConfirmed && $isWaitingDP)
+                                            <a href="{{ route('booking.payment', ['id' => $bk['id']]) }}" class="px-5 py-2.5 rounded-xl bg-[#5b4b38] hover:bg-[#483b2c] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer flex items-center gap-2">
+                                                <span>BAYAR DP SEKARANG</span>
+                                                <span class="text-sm">→</span>
+                                            </a>
+                                        @elseif($isBookingActive || $isDPPaid)
+                                            @if($remainingDisplay > 0)
+                                                <a href="{{ route('booking.payment', ['id' => $bk['id'], 'type' => 'pelunasan']) }}" class="px-4 py-2.5 rounded-xl bg-[#5b4b38] hover:bg-[#483b2c] text-white text-xs font-bold shadow-2xs hover:shadow transition cursor-pointer flex items-center gap-1.5">
+                                                    <span>Bayar Pelunasan (Rp {{ number_format($remainingDisplay, 0, ',', '.') }})</span>
+                                                    <span>→</span>
+                                                </a>
+                                            @endif
+                                        @endif
+
+                                        <a href="{{ route('booking.success', ['id' => $bk['id']]) }}" class="px-4 py-2.5 rounded-xl border border-[#ded5cb] hover:border-[#5b4b38] hover:bg-[#faf7f2] text-xs font-semibold text-[#5b4b38] hover:text-[#27221e] bg-white transition shadow-2xs">
+                                            Lihat Detail / Invoice
+                                        </a>
+                                    </div>
                                 </div>
 
                             </div>
                         @endforeach
+
+                        <!-- Bottom View Less Trigger when multiple bookings are shown -->
+                        @if(!empty($userBookingsList) && count($userBookingsList) > 1)
+                            <div id="view-less-bottom" class="hidden p-3.5 bg-[#faf8f5] text-center border-t border-[#ede7df]">
+                                <button type="button" 
+                                        onclick="toggleBookingsView()" 
+                                        class="inline-flex items-center gap-1.5 text-xs font-bold text-[#5b4b38] hover:text-[#27221e] px-4 py-2 rounded-xl bg-white border border-[#ded5cb] hover:bg-[#ede7df] shadow-2xs transition cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+                                    </svg>
+                                    <span>View Less (Tampilkan Lebih Sedikit)</span>
+                                </button>
+                            </div>
+                        @endif
                     @else
                         <!-- Empty State when user has no bookings -->
                         <div class="p-8 sm:p-12 text-center flex flex-col items-center justify-center space-y-3">
@@ -926,14 +952,69 @@
                 });
             }
 
-            // View all bookings click UX
-            const viewAllBtn = document.getElementById('view-all-btn');
-            if (viewAllBtn) {
-                viewAllBtn.addEventListener('click', () => {
-                    showToast('Menampilkan seluruh riwayat pemesanan');
-                });
-            }
         });
+
+        // ==================== VIEW ALL / VIEW LESS TOGGLE LOGIC ====================
+        let isBookingsExpanded = false;
+
+        function toggleBookingsView() {
+            const extraItems = document.querySelectorAll('.booking-extra-item');
+            const toggleText = document.getElementById('view-toggle-text');
+            const toggleIcon = document.getElementById('view-toggle-icon');
+            const bottomBar = document.getElementById('view-less-bottom');
+            const totalBookings = {{ !empty($userBookingsList) ? count($userBookingsList) : 0 }};
+
+            if (totalBookings > 1) {
+                isBookingsExpanded = !isBookingsExpanded;
+                extraItems.forEach(item => {
+                    if (isBookingsExpanded) {
+                        item.classList.remove('hidden');
+                        item.classList.add('animate-in', 'fade-in', 'duration-300');
+                    } else {
+                        item.classList.add('hidden');
+                    }
+                });
+
+                if (isBookingsExpanded) {
+                    if (toggleText) toggleText.textContent = 'View Less';
+                    if (toggleIcon) toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />';
+                    if (bottomBar) bottomBar.classList.remove('hidden');
+                    showToast('Menampilkan seluruh ' + totalBookings + ' riwayat pesanan');
+                } else {
+                    if (toggleText) toggleText.textContent = 'View All (' + totalBookings + ')';
+                    if (toggleIcon) toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />';
+                    if (bottomBar) bottomBar.classList.add('hidden');
+                    
+                    const headerEl = document.getElementById('booking-history-header');
+                    if (headerEl) {
+                        headerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                    showToast('Menampilkan lebih sedikit (1 riwayat terbaru)');
+                }
+            } else if (totalBookings === 1) {
+                // Toggle compact / detailed view for the single booking
+                const bodies = document.querySelectorAll('.booking-card-body');
+                let currentlyHidden = false;
+                bodies.forEach(body => {
+                    if (body.classList.contains('hidden')) {
+                        currentlyHidden = true;
+                        body.classList.remove('hidden');
+                    } else {
+                        body.classList.add('hidden');
+                    }
+                });
+
+                if (currentlyHidden) {
+                    if (toggleText) toggleText.textContent = 'View Less';
+                    if (toggleIcon) toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />';
+                    showToast('Menampilkan detail lengkap pesanan');
+                } else {
+                    if (toggleText) toggleText.textContent = 'View All';
+                    if (toggleIcon) toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />';
+                    showToast('Menampilkan lebih sedikit (Ringkasan)');
+                }
+            }
+        }
 
         function closeBookingSuccessPopup() {
             const modal = document.getElementById('modal-booking-success-popup');
