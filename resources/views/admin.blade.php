@@ -786,7 +786,7 @@
 
 
     <!-- ==================== MODAL: TAMBAH PRODUK / LAYANAN BARU ==================== -->
-    <div id="modal-add-service" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-add-service" class="fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -902,7 +902,7 @@
     </div>
 
     <!-- ==================== MODAL: EDIT PRODUK / LAYANAN ==================== -->
-    <div id="modal-edit-service" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-edit-service" class="fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -1014,7 +1014,7 @@
     </div>
 
     <!-- ==================== MODAL: KONFIRMASI HAPUS PRODUK ==================== -->
-    <div id="modal-delete-service" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-delete-service" class="fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-5 text-center">
             
             <div class="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200">
@@ -1459,10 +1459,10 @@
     <div id="drawer-categories-backdrop" onclick="toggleCategoriesDrawer()" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 transition-opacity duration-300 opacity-0 pointer-events-none"></div>
 
     <!-- ==================== DRAWER: MANAJEMEN KATEGORI & KATALOG PRODUK ==================== -->
-    <div id="drawer-categories" class="fixed inset-y-0 right-0 z-50 w-full sm:w-[650px] md:w-[780px] lg:w-[920px] bg-white border-l border-[#ede7df] shadow-2xl flex flex-col justify-between overflow-y-auto transform translate-x-full transition-transform duration-300 ease-in-out">
+    <div id="drawer-categories" class="fixed inset-y-0 right-0 z-50 w-full sm:w-[650px] md:w-[780px] lg:w-[920px] bg-white border-l border-[#ede7df] shadow-2xl flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out">
         
         <!-- 1. Drawer Header -->
-        <div class="p-5 sm:p-6 border-b border-[#f2ece5] bg-[#faf8f5] sticky top-0 z-20 space-y-3">
+        <div class="p-5 sm:p-6 border-b border-[#f2ece5] bg-[#faf8f5] shrink-0 z-10 space-y-3">
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="w-10 h-10 rounded-2xl bg-[#5b4b38] text-white flex items-center justify-center shadow-xs shrink-0">
@@ -1507,7 +1507,7 @@
         </div>
 
         <!-- 2. Drawer Body: Categories Grid & Product Catalog -->
-        <div class="flex-1 p-5 sm:p-6 space-y-6">
+        <div class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
             
             <!-- Category Cards Grid -->
             <div>
