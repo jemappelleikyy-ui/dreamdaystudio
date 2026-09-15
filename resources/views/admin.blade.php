@@ -470,6 +470,78 @@
                                     </td>
 
                                     <!-- Column 4: Price & DP Breakdown -->
+                                    @php
+                                        $bookingProofs = [];
+                                        $pendingSum = 0;
+                                        $rawPayments = [];
+
+                                        if (!empty($booking['payments']) && is_array($booking['payments'])) {
+                                            foreach ($booking['payments'] as $pm) {
+                                                $rawPayments[] = $pm;
+                                                if (strtoupper(trim($pm['status'] ?? '')) === 'MENUNGGU VERIFIKASI') {
+                                                    $pendingSum += (int) ($pm['amount'] ?? 0);
+                                                }
+                                            }
+                                        }
+
+                                        // Ensure DP from booking table exists if not already in payments
+                                        $hasDpInPayments = false;
+                                        foreach ($rawPayments as $pm) {
+                                            if (strtolower($pm['payment_type'] ?? '') === 'dp') {
+                                                $hasDpInPayments = true;
+                                                break;
+                                            }
+                                        }
+
+                                        if (!$hasDpInPayments && !empty($booking['payment_proof'])) {
+                                            $rawPayments[] = [
+                                                'id' => 0,
+                                                'payment_type' => 'dp',
+                                                'amount' => $dpAmount,
+                                                'payment_method' => $booking['payment_method'] ?? 'Transfer',
+                                                'status' => in_array($pStatusUpper, ['DP DIBAYAR', 'LUNAS']) ? 'TERVERIFIKASI' : 'MENUNGGU VERIFIKASI',
+                                                'paid_at' => $booking['created_at'] ?? '-',
+                                                'payment_proof' => $booking['payment_proof'],
+                                                'notes' => '',
+                                            ];
+                                            if (!in_array($pStatusUpper, ['DP DIBAYAR', 'LUNAS'])) {
+                                                $pendingSum += $dpAmount;
+                                            }
+                                        }
+
+                                        // Strict sorting: DP ALWAYS first (Bukti #1), then remaining payments chronologically (id ASC)
+                                        usort($rawPayments, function($a, $b) {
+                                            $aIsDp = (strtolower($a['payment_type'] ?? '') === 'dp');
+                                            $bIsDp = (strtolower($b['payment_type'] ?? '') === 'dp');
+                                            if ($aIsDp && !$bIsDp) return -1;
+                                            if (!$aIsDp && $bIsDp) return 1;
+                                            return ($a['id'] ?? 0) <=> ($b['id'] ?? 0);
+                                        });
+
+                                        foreach ($rawPayments as $pm) {
+                                            if (!empty($pm['payment_proof'])) {
+                                                $pType = strtolower($pm['payment_type'] ?? 'dp');
+                                                $tName = match($pType) {
+                                                    'dp' => 'Pembayaran DP (' . $dpPct . '%)',
+                                                    'pelunasan' => 'Pembayaran Sisa / Pelunasan',
+                                                    'cicilan', 'sisa' => 'Pembayaran Sisa (Cicilan)',
+                                                    default => 'Pembayaran ' . ucfirst($pType)
+                                                };
+                                                $pSt = strtoupper(trim($pm['status'] ?? ''));
+                                                $bookingProofs[] = [
+                                                    'id' => $pm['id'] ?? null,
+                                                    'type' => $tName,
+                                                    'raw_type' => $pType,
+                                                    'amount' => (int) ($pm['amount'] ?? 0),
+                                                    'method' => $pm['payment_method'] ?? 'Transfer',
+                                                    'status' => $pSt ?: 'MENUNGGU VERIFIKASI',
+                                                    'paid_at' => !empty($pm['paid_at']) ? date('d M Y, H:i', strtotime($pm['paid_at'])) . ' WIB' : (!empty($pm['created_at']) ? date('d M Y, H:i', strtotime($pm['created_at'])) . ' WIB' : '-'),
+                                                    'proof' => asset($pm['payment_proof']),
+                                                    'notes' => $pm['notes'] ?? '',
+                                                ];
+                                            }
+                                        }
+                                    @endphp
                                     <td class="py-4 px-5 align-top space-y-0.5">
                                         <div class="font-bold text-xs sm:text-sm text-[#27221e]">
                                             Total: Rp {{ number_format($total, 0, ',', '.') }}
@@ -477,23 +549,28 @@
                                         <div class="text-[0.75rem] text-[#5b4b38] font-semibold">
                                             DP ({{ $dpPct }}%): Rp {{ number_format($dpAmount, 0, ',', '.') }}
                                         </div>
-                                        <div class="text-[0.7rem] text-emerald-700">
+                                        <div class="text-[0.7rem] text-emerald-700 font-bold">
                                             Dibayar: <strong>Rp {{ number_format($amountPaid, 0, ',', '.') }}</strong>
                                         </div>
-                                        <div class="text-[0.7rem] text-rose-700">
+                                        <div class="text-[0.7rem] text-rose-700 font-bold">
                                             Sisa: <strong>Rp {{ number_format($remaining, 0, ',', '.') }}</strong>
                                         </div>
+                                        @if($pendingSum > 0)
+                                            <div class="text-[0.62rem] text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block font-semibold">
+                                                ⏳ +Rp {{ number_format($pendingSum, 0, ',', '.') }} Menunggu Verifikasi
+                                            </div>
+                                        @endif
                                         @if(!empty($booking['payment_method']))
                                             <div class="text-[0.65rem] text-[#8d8277] pt-0.5">
                                                 Metode: <span class="font-medium text-[#27221e]">{{ $booking['payment_method'] }}</span>
                                             </div>
                                         @endif
-                                        @if(!empty($booking['payment_proof']))
-                                            <div class="pt-0.5">
+                                        @if(count($bookingProofs) > 0)
+                                            <div class="pt-1">
                                                 <button type="button" 
-                                                        onclick="viewProofModal('{{ asset($booking['payment_proof']) }}')" 
-                                                        class="inline-flex items-center gap-1 text-[0.65rem] text-[#5b4b38] hover:underline font-bold cursor-pointer">
-                                                    <span>📷 Lihat Bukti Transfer</span>
+                                                        onclick="openMultiProofModal({{ json_encode($bookingProofs) }}, '{{ $booking['id'] }}', '{{ addslashes($booking['customer_name'] ?? '') }}')" 
+                                                        class="inline-flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded-md bg-[#faf7f2] border border-[#ede7df] hover:bg-[#ede7df] text-[#5b4b38] font-bold cursor-pointer transition shadow-2xs">
+                                                    <span>📷 Lihat Bukti Transfer ({{ count($bookingProofs) }} Bukti)</span>
                                                 </button>
                                             </div>
                                         @endif
@@ -542,8 +619,8 @@
                                                     <span>✕ Tolak</span>
                                                 </button>
                                             </div>
-                                        @elseif(in_array($pStatusUpper, ['MENUNGGU VERIFIKASI', 'MENUNGGU VERIFIKASI DP']) || $bStatusUpper === 'MENUNGGU VERIFIKASI DP')
-                                            <!-- Prominent Action 2: Verify DP Payment -->
+                                        @elseif((in_array($pStatusUpper, ['MENUNGGU VERIFIKASI', 'MENUNGGU VERIFIKASI DP']) || $bStatusUpper === 'MENUNGGU VERIFIKASI DP') && $bStatusUpper !== 'BOOKING AKTIF' && $bStatusUpper !== 'SELESAI')
+                                            <!-- Prominent Action 2: Verify DP Payment (Hanya jika DP belum diverifikasi) -->
                                             <div>
                                                 <button type="button" 
                                                          onclick="openVerificationModal(this)" 
@@ -609,7 +686,7 @@
 
 
     <!-- ==================== MODAL: TAMBAH KATEGORI BARU ==================== -->
-    <div id="modal-add-category" class="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-add-category" class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-lg w-full p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -671,7 +748,7 @@
     </div>
 
     <!-- ==================== MODAL: EDIT KATEGORI ==================== -->
-    <div id="modal-edit-category" class="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-edit-category" class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-lg w-full p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -745,7 +822,7 @@
     </div>
 
     <!-- ==================== MODAL: KONFIRMASI HAPUS KATEGORI ==================== -->
-    <div id="modal-delete-category" class="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-delete-category" class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-6 text-center">
             
             <div class="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 shadow-xs">
@@ -786,7 +863,7 @@
 
 
     <!-- ==================== MODAL: TAMBAH PRODUK / LAYANAN BARU ==================== -->
-    <div id="modal-add-service" class="fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-add-service" class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -902,7 +979,7 @@
     </div>
 
     <!-- ==================== MODAL: EDIT PRODUK / LAYANAN ==================== -->
-    <div id="modal-edit-service" class="fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-edit-service" class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6">
             
             <div class="flex items-center justify-between pb-3 border-b border-[#f2ece5]">
@@ -1014,7 +1091,7 @@
     </div>
 
     <!-- ==================== MODAL: KONFIRMASI HAPUS PRODUK ==================== -->
-    <div id="modal-delete-service" class="fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div id="modal-delete-service" class="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-3xl border border-[#ede7df] shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-5 text-center">
             
             <div class="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200">
@@ -1117,11 +1194,15 @@
                 </div>
 
                 <!-- Bukti Pembayaran Preview Section -->
-                <div id="modal-proof-section" class="p-4 rounded-2xl border border-[#ede7df] space-y-2 hidden">
-                    <span class="font-bold text-[#554d46] block">Bukti Pembayaran Diupload Pelanggan:</span>
-                    <div class="text-center">
-                        <img id="modal-proof-img" src="" alt="Bukti Transfer" class="max-h-56 mx-auto rounded-xl border border-[#ded5cb] shadow-xs cursor-pointer" onclick="window.open(this.src, '_blank')">
-                        <p class="text-[0.65rem] text-[#8d8277] mt-1">Klik gambar untuk melihat ukuran penuh</p>
+                <div id="modal-proof-section" class="p-4 rounded-2xl border border-[#ede7df] space-y-3 hidden">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-[#554d46] block text-xs">Bukti Pembayaran Diupload Pelanggan:</span>
+                        <button type="button" id="btn-modal-open-multi-proof" class="text-[0.7rem] text-[#5b4b38] hover:underline font-bold cursor-pointer">
+                            Lihat Semua Bukti &amp; Verifikasi →
+                        </button>
+                    </div>
+                    <div id="modal-proof-gallery" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <!-- Populated dynamically via JS -->
                     </div>
                 </div>
 
@@ -1230,6 +1311,41 @@
 
             </div>
 
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: MULTI-BUKTI TRANSFER PEMBAYARAN ==================== -->
+    <div id="modal-multi-proof" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden" onclick="closeMultiProofModal()">
+        <div class="max-w-4xl w-full max-h-[90vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-[#f2ece5] bg-[#faf8f5] flex items-center justify-between">
+                <div>
+                    <h3 class="font-serif-luxury text-lg sm:text-xl font-bold text-[#27221e]">
+                        Bukti Transfer Pembayaran Pelanggan
+                    </h3>
+                    <p class="text-xs text-[#8d8277]" id="multi-proof-booking-meta">
+                        Booking #DDS-2026-xxxx • Pelanggan: -
+                    </p>
+                </div>
+                <button type="button" onclick="closeMultiProofModal()" class="p-2 rounded-xl text-[#8d8277] hover:text-[#27221e] hover:bg-[#ede7df] transition cursor-pointer">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Proof Cards List Container -->
+            <div class="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 bg-[#fcfaf7]" style="overflow-x: hidden !important; overflow-y: auto;" id="multi-proof-container">
+                <!-- Injected via JavaScript -->
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3.5 border-t border-[#f2ece5] bg-white flex items-center justify-between">
+                <span class="text-xs text-[#8d8277]" id="multi-proof-count-summary">
+                    Total: 0 Bukti Transfer
+                </span>
+                <button type="button" onclick="closeMultiProofModal()" class="px-5 py-2 rounded-xl bg-[#5b4b38] hover:bg-[#483b2c] text-white text-xs font-bold transition cursor-pointer">
+                    Tutup
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1362,10 +1478,15 @@
                 @foreach($initialDrawerConv['messages'] as $msg)
                     @php
                         $msgDate = $msg['date_label'] ?? 'Hari Ini';
+                        if (strtolower(trim($msgDate)) === 'hari ini') {
+                            $msgDate = 'Hari Ini';
+                        } elseif (strtolower(trim($msgDate)) === 'kemarin') {
+                            $msgDate = 'Kemarin';
+                        }
                     @endphp
 
                     <!-- Minimal WhatsApp Date Divider Chip -->
-                    @if($msgDate !== $lastDrawerDate)
+                    @if(is_null($lastDrawerDate) || strcasecmp(trim($msgDate), trim((string)$lastDrawerDate)) !== 0)
                         <div class="flex items-center justify-center my-1.5">
                             <span class="bg-[#ede7df] text-[#73685e] text-[9.5px] font-medium tracking-normal px-2.5 py-0.5 rounded-md shadow-2xs">
                                 {{ $msgDate }}
@@ -1456,10 +1577,10 @@
     </div>
 
     <!-- ==================== DRAWER: BACKDROP OVERLAY UNTUK KATEGORI & PRODUK ==================== -->
-    <div id="drawer-categories-backdrop" onclick="toggleCategoriesDrawer()" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 transition-opacity duration-300 opacity-0 pointer-events-none"></div>
+    <div id="drawer-categories-backdrop" onclick="closeCategoriesDrawer()" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-[70] transition-opacity duration-300 opacity-0 pointer-events-none"></div>
 
     <!-- ==================== DRAWER: MANAJEMEN KATEGORI & KATALOG PRODUK ==================== -->
-    <div id="drawer-categories" class="fixed inset-y-0 right-0 z-50 w-full sm:w-[650px] md:w-[780px] lg:w-[920px] bg-white border-l border-[#ede7df] shadow-2xl flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out">
+    <div id="drawer-categories" class="fixed inset-y-0 right-0 z-[75] w-full sm:w-[650px] md:w-[780px] lg:w-[920px] bg-white border-l border-[#ede7df] shadow-2xl flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out">
         
         <!-- 1. Drawer Header -->
         <div class="p-5 sm:p-6 border-b border-[#f2ece5] bg-[#faf8f5] shrink-0 z-10 space-y-3">
@@ -1495,7 +1616,7 @@
                         <span class="hidden sm:inline">+ Tambah Kategori</span>
                         <span class="sm:hidden">+Kategori</span>
                     </button>
-                    <button type="button" onclick="toggleCategoriesDrawer()" 
+                    <button type="button" onclick="closeCategoriesDrawer()" 
                             title="Tutup"
                             class="p-2 rounded-xl text-[#8d8277] hover:text-[#27221e] hover:bg-[#ede7df] cursor-pointer transition shrink-0">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -1647,7 +1768,7 @@
                                 </p>
                             </div>
 
-                            <div class="pt-2.5 border-t border-[#f2ece5] flex items-center justify-between gap-2">
+                            <div class="pt-2.5 border-t border-[#f2ece5] flex items-center justify-between gap-2" onclick="event.stopPropagation()">
                                 <button type="button" 
                                         onclick="openEditServiceModal(this)" 
                                         data-srv="{!! htmlspecialchars(json_encode($srv), ENT_QUOTES, 'UTF-8') !!}"
@@ -1769,6 +1890,19 @@
 
             // Scroll chat containers to bottom
             scrollChatToBottom();
+
+            // Auto-open categories drawer if session flash, query parameter, or hash requests it
+            @if(session('open_categories') || request('tab') === 'categories')
+                setTimeout(() => {
+                    openCategoriesDrawer();
+                }, 150);
+            @else
+                if (window.location.search.includes('tab=categories') || window.location.hash === '#drawer-categories') {
+                    setTimeout(() => {
+                        openCategoriesDrawer();
+                    }, 150);
+                }
+            @endif
         });
 
         // ==================== MULTI-USER CHAT DRAWER MANAGEMENT LOGIC ====================
@@ -1780,23 +1914,38 @@
             if (drawerCont) drawerCont.scrollTop = drawerCont.scrollHeight;
         }
 
-        function toggleCategoriesDrawer() {
+        function openCategoriesDrawer() {
             const drawer = document.getElementById('drawer-categories');
             const backdrop = document.getElementById('drawer-categories-backdrop');
             if (drawer) {
+                drawer.classList.remove('translate-x-full');
+                if (backdrop) {
+                    backdrop.classList.remove('opacity-0', 'pointer-events-none');
+                    backdrop.classList.add('opacity-100', 'pointer-events-auto');
+                }
+            }
+        }
+
+        function closeCategoriesDrawer() {
+            const drawer = document.getElementById('drawer-categories');
+            const backdrop = document.getElementById('drawer-categories-backdrop');
+            if (drawer) {
+                drawer.classList.add('translate-x-full');
+                if (backdrop) {
+                    backdrop.classList.remove('opacity-100', 'pointer-events-auto');
+                    backdrop.classList.add('opacity-0', 'pointer-events-none');
+                }
+            }
+        }
+
+        function toggleCategoriesDrawer() {
+            const drawer = document.getElementById('drawer-categories');
+            if (drawer) {
                 const isClosed = drawer.classList.contains('translate-x-full');
                 if (isClosed) {
-                    drawer.classList.remove('translate-x-full');
-                    if (backdrop) {
-                        backdrop.classList.remove('opacity-0', 'pointer-events-none');
-                        backdrop.classList.add('opacity-100', 'pointer-events-auto');
-                    }
+                    openCategoriesDrawer();
                 } else {
-                    drawer.classList.add('translate-x-full');
-                    if (backdrop) {
-                        backdrop.classList.remove('opacity-100', 'pointer-events-auto');
-                        backdrop.classList.add('opacity-0', 'pointer-events-none');
-                    }
+                    closeCategoriesDrawer();
                 }
             }
         }
@@ -1936,8 +2085,16 @@
 
             if (msgs && msgs.length > 0) {
                 msgs.forEach(m => {
-                    const msgDate = m.date_label || 'Hari Ini';
-                    if (msgDate !== lastDate) {
+                    let msgDate = m.date_label || 'Hari Ini';
+                    if (msgDate.toLowerCase().trim() === 'hari ini') {
+                        msgDate = 'Hari Ini';
+                    } else if (msgDate.toLowerCase().trim() === 'kemarin') {
+                        msgDate = 'Kemarin';
+                    }
+                    const normDate = msgDate.toLowerCase().trim();
+                    const prevNormDate = lastDate ? lastDate.toLowerCase().trim() : null;
+
+                    if (!lastDate || normDate !== prevNormDate) {
                         drawerHtml += `
                             <div class="flex items-center justify-center my-1.5">
                                 <span class="bg-[#ede7df] text-[#73685e] text-[9.5px] font-medium tracking-normal px-2.5 py-0.5 rounded-md shadow-2xs">
@@ -2009,7 +2166,7 @@
                 name: 'Admin DreamDay',
                 message: message,
                 time: timeStr,
-                date_label: 'HARI INI',
+                date_label: 'Hari Ini',
                 is_read: true
             };
 
@@ -2303,14 +2460,17 @@
 
         // Category Modals
         function openAddCategoryModal() {
+            openCategoriesDrawer();
             document.getElementById('modal-add-category').classList.remove('hidden');
         }
 
         function closeAddCategoryModal() {
             document.getElementById('modal-add-category').classList.add('hidden');
+            openCategoriesDrawer();
         }
 
         function openEditCategoryModal(btn) {
+            openCategoriesDrawer();
             const cat = JSON.parse(btn.getAttribute('data-cat'));
             document.getElementById('edit_cat_name').value = cat.name;
             document.getElementById('edit_cat_desc').value = cat.description || '';
@@ -2333,9 +2493,11 @@
 
         function closeEditCategoryModal() {
             document.getElementById('modal-edit-category').classList.add('hidden');
+            openCategoriesDrawer();
         }
 
         function openDeleteCategoryModal(id, name, prodCount = 0, bCount = 0) {
+            openCategoriesDrawer();
             document.getElementById('delete-cat-name').textContent = '"' + name + '"';
             const form = document.getElementById('form-delete-category');
             form.action = '/admin/categories/' + id + '/delete';
@@ -2355,20 +2517,24 @@
 
         function closeDeleteCategoryModal() {
             document.getElementById('modal-delete-category').classList.add('hidden');
+            openCategoriesDrawer();
         }
 
 
         // Service / Product Modals
         function openAddServiceModal() {
+            openCategoriesDrawer();
             document.getElementById('add_srv_category').value = activeCategoryName;
             document.getElementById('modal-add-service').classList.remove('hidden');
         }
 
         function closeAddServiceModal() {
             document.getElementById('modal-add-service').classList.add('hidden');
+            openCategoriesDrawer();
         }
 
         function openEditServiceModal(btn) {
+            openCategoriesDrawer();
             const srv = JSON.parse(btn.getAttribute('data-srv'));
             document.getElementById('edit_srv_title').value = srv.title;
             document.getElementById('edit_srv_category').value = srv.category;
@@ -2388,9 +2554,11 @@
 
         function closeEditServiceModal() {
             document.getElementById('modal-edit-service').classList.add('hidden');
+            openCategoriesDrawer();
         }
 
         function openDeleteServiceModal(id, title) {
+            openCategoriesDrawer();
             document.getElementById('delete-srv-name').textContent = title;
             const form = document.getElementById('form-delete-service');
             form.action = '/admin/services/' + id + '/delete';
@@ -2400,6 +2568,7 @@
 
         function closeDeleteServiceModal() {
             document.getElementById('modal-delete-service').classList.add('hidden');
+            openCategoriesDrawer();
         }
 
         function formatRupiah(amount) {
@@ -2537,18 +2706,86 @@
 
             if (['MENUNGGU KONFIRMASI ADMIN', 'MENUNGGU KONFIRMASI', 'PENDING'].includes(bUpper)) {
                 confirmGroup.classList.remove('hidden');
+            } else if (bUpper === 'BOOKING AKTIF' || ['DP DIBAYAR'].includes(bUpper)) {
+                pelunasanGroup.classList.remove('hidden');
             } else if (['MENUNGGU VERIFIKASI', 'MENUNGGU VERIFIKASI DP'].includes(pUpper) || bUpper === 'MENUNGGU VERIFIKASI DP') {
                 dpGroup.classList.remove('hidden');
-            } else if (['DP DIBAYAR', 'BOOKING AKTIF'].includes(bUpper) || pUpper === 'DP DIBAYAR') {
-                pelunasanGroup.classList.remove('hidden');
             }
 
-            // Handle Proof Image
+            // Handle Proof Image & Multi-proof Gallery
             const proofSection = document.getElementById('modal-proof-section');
-            const proofImg = document.getElementById('modal-proof-img');
-            if (booking.payment_proof) {
-                proofImg.src = '/' + booking.payment_proof.replace(/^\/+/, '');
+            const proofGallery = document.getElementById('modal-proof-gallery');
+            const multiProofBtn = document.getElementById('btn-modal-open-multi-proof');
+
+            let proofsList = [];
+            if (booking.payments && Array.isArray(booking.payments)) {
+                booking.payments.forEach((pm, idx) => {
+                    if (pm.payment_proof) {
+                        const isDp = (pm.payment_type || 'dp').toLowerCase() === 'dp';
+                        proofsList.push({
+                            id: pm.id || null,
+                            type: isDp ? `Pembayaran DP (${booking.dp_percentage || 30}%)` : 'Pembayaran Sisa / Pelunasan',
+                            raw_type: isDp ? 'dp' : 'pelunasan',
+                            amount: pm.amount || 0,
+                            method: pm.payment_method || booking.payment_method || 'Transfer',
+                            status: (pm.status || 'MENUNGGU VERIFIKASI').toUpperCase(),
+                            paid_at: pm.paid_at || pm.created_at || '-',
+                            proof: '/' + pm.payment_proof.replace(/^\/+/, ''),
+                            notes: pm.notes || ''
+                        });
+                    }
+                });
+            }
+            if (proofsList.length === 0 && booking.payment_proof) {
+                proofsList.push({
+                    id: null,
+                    type: `Pembayaran DP (${booking.dp_percentage || 30}%)`,
+                    raw_type: 'dp',
+                    amount: booking.dp_amount || 0,
+                    method: booking.payment_method || 'Transfer',
+                    status: (booking.payment_status === 'DP Dibayar' || booking.status === 'Booking Aktif') ? 'TERVERIFIKASI' : 'MENUNGGU VERIFIKASI',
+                    paid_at: booking.created_at || '-',
+                    proof: '/' + booking.payment_proof.replace(/^\/+/, ''),
+                    notes: ''
+                });
+            }
+
+            // Strict sorting: DP ALWAYS first (Bukti #1), then subsequent payments chronologically (id ASC)
+            proofsList.sort((a, b) => {
+                const aIsDp = (a.raw_type || '').toLowerCase() === 'dp';
+                const bIsDp = (b.raw_type || '').toLowerCase() === 'dp';
+                if (aIsDp && !bIsDp) return -1;
+                if (!aIsDp && bIsDp) return 1;
+                return (a.id || 0) - (b.id || 0);
+            });
+
+            if (proofsList.length > 0) {
                 proofSection.classList.remove('hidden');
+                let galleryHtml = '';
+                proofsList.forEach((pf, i) => {
+                    galleryHtml += `
+                        <div class="p-2.5 rounded-xl border border-[#ded5cb] bg-[#faf8f5] flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <img src="${pf.proof}" alt="${pf.type}" class="w-12 h-12 object-cover rounded-lg border border-[#ede7df] cursor-pointer shrink-0" onclick="viewProofModal('${pf.proof}')">
+                                <div class="min-w-0 text-xs">
+                                    <span class="font-bold text-[#27221e] block truncate">${pf.type}</span>
+                                    <strong class="text-[#5b4b38] block text-[0.75rem]">${formatRupiah(pf.amount)}</strong>
+                                    <span class="text-[0.65rem] text-[#8d8277] block">${pf.method}</span>
+                                </div>
+                            </div>
+                            <button type="button" onclick="viewProofModal('${pf.proof}')" class="px-2 py-1 rounded-md text-[0.65rem] bg-white border border-[#ded5cb] hover:bg-[#ede7df] text-[#5b4b38] font-semibold shrink-0 cursor-pointer">
+                                Zoom
+                            </button>
+                        </div>
+                    `;
+                });
+                if (proofGallery) proofGallery.innerHTML = galleryHtml;
+
+                if (multiProofBtn) {
+                    multiProofBtn.onclick = function() {
+                        openMultiProofModal(proofsList, booking.id, booking.customer_name);
+                    };
+                }
             } else {
                 proofSection.classList.add('hidden');
             }
@@ -2563,6 +2800,177 @@
         function viewProofModal(src) {
             document.getElementById('zoom-proof-img').src = src;
             document.getElementById('modal-proof-zoom').classList.remove('hidden');
+        }
+
+        function openMultiProofModal(proofs, bookingId, customerName) {
+            const container = document.getElementById('multi-proof-container');
+            const metaEl = document.getElementById('multi-proof-booking-meta');
+            const countEl = document.getElementById('multi-proof-count-summary');
+
+            if (metaEl) {
+                metaEl.textContent = `Booking #${bookingId} • Pelanggan: ${customerName || '-'}`;
+            }
+
+            // Strict sorting: DP ALWAYS first (Bukti #1), then subsequent payments chronologically (id ASC)
+            if (proofs && Array.isArray(proofs)) {
+                proofs.sort((a, b) => {
+                    const aIsDp = (a.raw_type || '').toLowerCase() === 'dp';
+                    const bIsDp = (b.raw_type || '').toLowerCase() === 'dp';
+                    if (aIsDp && !bIsDp) return -1;
+                    if (!aIsDp && bIsDp) return 1;
+                    return (a.id || 0) - (b.id || 0);
+                });
+            }
+
+            if (countEl) {
+                countEl.textContent = `Total: ${proofs ? proofs.length : 0} Bukti Transfer Terdata`;
+            }
+
+            if (!proofs || proofs.length === 0) {
+                container.innerHTML = `
+                    <div class="p-8 text-center text-[#8d8277]">
+                        <p>Belum ada bukti pembayaran yang diunggah untuk booking ini.</p>
+                    </div>
+                `;
+            } else {
+                let html = '';
+                proofs.forEach((proof, idx) => {
+                    const isPending = proof.status === 'MENUNGGU VERIFIKASI';
+                    const isAccepted = proof.status === 'TERVERIFIKASI';
+                    const isRejected = proof.status === 'DITOLAK';
+
+                    const statusBadgeStyle = isAccepted 
+                        ? 'background-color: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;' 
+                        : (isPending ? 'background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a;' : 'background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca;');
+
+                    const typeBadgeStyle = proof.raw_type === 'dp' 
+                        ? 'background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0;' 
+                        : 'background-color: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe;';
+
+                    let actionHtml = '';
+                    if (isPending) {
+                        actionHtml = `
+                            <button type="button" onclick="verifySinglePayment('${proof.id || ''}', '${bookingId}', 'accept_${proof.raw_type}')" style="background-color: #047857; color: #ffffff; border: none; padding: 0.65rem 0.75rem; border-radius: 0.75rem; font-weight: 700; font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                <svg style="width: 15px; height: 15px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                <span>Terima Pembayaran</span>
+                            </button>
+                            <button type="button" onclick="verifySinglePayment('${proof.id || ''}', '${bookingId}', 'reject_${proof.raw_type}')" style="background-color: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; padding: 0.65rem 0.75rem; border-radius: 0.75rem; font-weight: 700; font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%;">
+                                <svg style="width: 15px; height: 15px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                <span>Tolak Pembayaran</span>
+                            </button>
+                        `;
+                    } else if (isAccepted) {
+                        actionHtml = `
+                            <div style="background-color: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 0.65rem 0.75rem; border-radius: 0.75rem; font-size: 0.75rem; font-weight: 700; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%;">
+                                <svg style="width: 15px; height: 15px; color: #059669;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                <span>Terverifikasi</span>
+                            </div>
+                        `;
+                    } else if (isRejected) {
+                        actionHtml = `
+                            <div style="background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca; padding: 0.65rem 0.75rem; border-radius: 0.75rem; font-size: 0.75rem; font-weight: 700; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%;">
+                                <svg style="width: 15px; height: 15px; color: #e11d48;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                <span>Ditolak</span>
+                            </div>
+                        `;
+                    }
+
+                    html += `
+                        <div class="bg-white border border-[#ede7df] rounded-2xl p-4 sm:p-5 shadow-xs transition hover:border-[#b0a597]">
+                            <!-- Card Top Bar: Badges & External Link -->
+                            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 mb-4 border-b border-[#f2ece5]">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span style="${typeBadgeStyle}" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center">
+                                        Bukti #${idx + 1}: ${proof.type}
+                                    </span>
+                                    <span style="${statusBadgeStyle}" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center">
+                                        ${proof.status}
+                                    </span>
+                                </div>
+                                <button type="button" onclick="window.open('${proof.proof}', '_blank')" style="background-color: #faf8f5; color: #5b4b38; border: 1px solid #ded5cb;" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-[#ede7df] font-semibold text-xs transition cursor-pointer">
+                                    <svg class="w-3.5 h-3.5 text-[#8d8277]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                    <span>Buka Tab Baru</span>
+                                </button>
+                            </div>
+
+                            <!-- Card Body Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                                <!-- Col 1: Thumbnail -->
+                                <div class="md:col-span-3 flex justify-center">
+                                    <div class="relative group cursor-pointer w-36 h-36 rounded-xl border border-[#ded5cb] bg-[#faf8f5] flex items-center justify-center overflow-hidden" onclick="viewProofModal('${proof.proof}')" title="Klik untuk perbesar">
+                                        <img src="${proof.proof}" alt="${proof.type}" class="w-full h-full object-contain p-1">
+                                        <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition rounded-xl flex flex-col items-center justify-center text-white text-[0.7rem] font-bold gap-1">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/></svg>
+                                            <span>Perbesar</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Col 2: Info -->
+                                <div class="md:col-span-5 space-y-2.5">
+                                    <div>
+                                        <span class="text-[0.68rem] text-[#8d8277] uppercase tracking-wider font-semibold block">Nominal Pembayaran:</span>
+                                        <strong class="font-serif-luxury text-2xl font-bold text-[#5b4b38] block mt-0.5">${formatRupiah(proof.amount)}</strong>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-[#faf8f5] border border-[#ede7df] text-xs">
+                                        <div>
+                                            <span class="text-[#8d8277] text-[0.68rem] block">Metode Bayar:</span>
+                                            <strong class="text-[#27221e] font-semibold block mt-0.5">${proof.method}</strong>
+                                        </div>
+                                        <div>
+                                            <span class="text-[#8d8277] text-[0.68rem] block">Waktu Transfer:</span>
+                                            <strong class="text-[#27221e] font-semibold block mt-0.5">${proof.paid_at}</strong>
+                                        </div>
+                                    </div>
+
+                                    ${proof.notes ? `<div class="text-[0.7rem] text-[#685f58] italic p-2 rounded-lg bg-[#faf8f5] border border-[#ded5cb]">Catatan: ${proof.notes}</div>` : ''}
+                                </div>
+
+                                <!-- Col 3: Action Buttons -->
+                                <div class="md:col-span-4 flex flex-col gap-2.5 justify-center">
+                                    ${actionHtml}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            }
+
+            document.getElementById('modal-multi-proof').classList.remove('hidden');
+        }
+
+        function closeMultiProofModal() {
+            document.getElementById('modal-multi-proof').classList.add('hidden');
+        }
+
+        function verifySinglePayment(paymentId, bookingId, action) {
+            if (!confirm('Apakah Anda yakin ingin memproses status pembayaran ini?')) return;
+
+            fetch("{{ route('admin.booking.verify_payment') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRF-TOKEN": "{{ csrf_token() }}",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify({
+                    booking_id: bookingId,
+                    payment_id: paymentId,
+                    action: action
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    window.location.reload();
+                } else {
+                    alert(data.message || 'Gagal memproses verifikasi pembayaran.');
+                }
+            })
+            .catch(err => window.location.reload());
         }
 
         function submitPaymentVerification(action) {

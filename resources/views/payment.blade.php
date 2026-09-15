@@ -121,7 +121,94 @@
                 <form id="payment-form" action="{{ route('booking.payment.pay', ['id' => $booking['id']]) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
                     @csrf
                     <input type="hidden" name="payment_type" id="payment_type" value="{{ $paymentType }}">
+                    <input type="hidden" name="custom_amount" id="custom_amount" value="{{ $targetAmount }}">
                     <input type="hidden" name="payment_method" id="selected_payment_method" value="QRIS Instant">
+
+                    @if($paymentType === 'pelunasan')
+                        <!-- Opsi Pembayaran Pelunasan / Cicilan Sisa -->
+                        <div class="bg-white border border-[#ede7df] rounded-3xl p-6 sm:p-8 shadow-xs space-y-5">
+                            <div>
+                                <span class="text-[0.7rem] font-bold uppercase tracking-wider text-[#8d8277]">OPSI PEMBAYARAN SISA TAGIHAN</span>
+                                <h2 class="font-serif-luxury text-xl sm:text-2xl font-bold text-[#27221e] mt-1">
+                                    Pilih Nominal Pembayaran
+                                </h2>
+                                <p class="text-xs sm:text-sm text-[#685f58] mt-1">
+                                    Anda dapat melunasi 100% sisa tagihan acara atau membayar sebagian (cicilan bertahap).
+                                </p>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- Option 1: Bayar Penuh 100% -->
+                                <label class="payment-option-card relative p-4 rounded-2xl border-2 border-[#5b4b38] bg-[#faf7f2] cursor-pointer flex flex-col justify-between space-y-2 transition shadow-xs" id="opt-full-label">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2.5">
+                                            <input type="radio" name="payment_mode" value="full" checked onchange="handlePaymentModeChange('full')" class="accent-[#5b4b38] w-4 h-4">
+                                            <span class="font-bold text-sm text-[#27221e]">Bayar Lunas Penuh (100%)</span>
+                                        </div>
+                                        <span class="px-2 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">Lunas</span>
+                                    </div>
+                                    <div class="pt-2 border-t border-[#ede7df] flex items-center justify-between">
+                                        <span class="text-xs text-[#8d8277]">Nominal Pelunasan:</span>
+                                        <strong class="text-sm sm:text-base font-bold text-[#5b4b38]">Rp {{ number_format($targetAmount, 0, ',', '.') }}</strong>
+                                    </div>
+                                    <p class="text-[0.65rem] text-[#8d8277]">Setelah diverifikasi, reservasi Anda resmi lunas sepenuhnya.</p>
+                                </label>
+
+                                <!-- Option 2: Bayar Sebagian / Cicilan -->
+                                <label class="payment-option-card relative p-4 rounded-2xl border border-[#ede7df] bg-white hover:bg-[#fcfaf7] cursor-pointer flex flex-col justify-between space-y-2 transition" id="opt-partial-label">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2.5">
+                                            <input type="radio" name="payment_mode" value="partial" onchange="handlePaymentModeChange('partial')" class="accent-[#5b4b38] w-4 h-4">
+                                            <span class="font-bold text-sm text-[#27221e]">Bayar Sebagian (Cicilan Sisa)</span>
+                                        </div>
+                                        <span class="px-2 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider bg-sky-100 text-sky-800">Fleksibel</span>
+                                    </div>
+                                    <div class="pt-2 border-t border-[#ede7df] flex items-center justify-between">
+                                        <span class="text-xs text-[#8d8277]">Total Sisa:</span>
+                                        <strong class="text-sm font-semibold text-[#685f58]">Rp {{ number_format($targetAmount, 0, ',', '.') }}</strong>
+                                    </div>
+                                    <p class="text-[0.65rem] text-[#8d8277]">Bayar sebagian, sisa pembayaran akan tetap tercatat &amp; masih ada di akun Anda.</p>
+                                </label>
+                            </div>
+
+                            <!-- Partial Amount Input Section (Hidden by default) -->
+                            <div id="partial-amount-section" class="p-4 rounded-2xl bg-[#faf8f5] border border-[#ede7df] space-y-3 hidden">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <label for="custom_amount_display" class="text-xs font-bold text-[#554d46]">
+                                        Masukkan Nominal yang Ingin Dibayar Sekarang:
+                                    </label>
+                                    <div class="flex items-center gap-1.5">
+                                        <button type="button" onclick="setPresetFraction(0.5)" class="px-2.5 py-1 rounded-lg border border-[#ded5cb] text-[0.7rem] font-semibold bg-white hover:bg-[#ede7df] text-[#5b4b38] transition cursor-pointer">50%</button>
+                                        <button type="button" onclick="setPresetFraction(0.666667)" class="px-2.5 py-1 rounded-lg border border-[#ded5cb] text-[0.7rem] font-semibold bg-white hover:bg-[#ede7df] text-[#5b4b38] transition cursor-pointer">2/3</button>
+                                        <button type="button" onclick="setPresetFraction(0.75)" class="px-2.5 py-1 rounded-lg border border-[#ded5cb] text-[0.7rem] font-semibold bg-white hover:bg-[#ede7df] text-[#5b4b38] transition cursor-pointer">75%</button>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-stretch rounded-xl border border-[#ded5cb] bg-white overflow-hidden shadow-2xs focus-within:ring-2 focus-within:ring-[#5b4b38]/30 focus-within:border-[#5b4b38] transition">
+                                    <span class="inline-flex items-center px-4 bg-[#fcfaf7] border-r border-[#ded5cb] font-bold text-sm text-[#5b4b38] select-none shrink-0">
+                                        Rp
+                                    </span>
+                                    <input type="text" 
+                                           id="custom_amount_display" 
+                                           placeholder="Contoh: {{ number_format(round($targetAmount / 2), 0, ',', '.') }}" 
+                                           oninput="handleCustomAmountInput(this.value)" 
+                                           class="w-full px-4 py-3 text-base sm:text-lg font-bold text-[#27221e] bg-transparent outline-none border-none focus:outline-none focus:ring-0">
+                                </div>
+
+                                <!-- Live Remaining Balance Preview -->
+                                <div class="p-3 rounded-xl bg-white border border-[#ede7df] flex flex-wrap items-center justify-between gap-3 text-xs">
+                                    <div>
+                                        <span class="text-[#8d8277] block text-[0.7rem]">Dibayar Sekarang:</span>
+                                        <strong id="preview-pay-now" class="text-[#5b4b38] text-sm">Rp {{ number_format($targetAmount, 0, ',', '.') }}</strong>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-[#8d8277] block text-[0.7rem]">Sisa Pembayaran Masih Ada:</span>
+                                        <strong id="preview-remaining-after" class="text-rose-700 text-sm">Rp 0</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
 
                     <!-- Payment Method Selector Card -->
                     <div class="bg-white border border-[#ede7df] rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
@@ -315,7 +402,7 @@
                                     <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
-                                    <span>
+                                    <span id="btn-submit-text">
                                         @if($paymentType === 'pelunasan')
                                             Bayar Pelunasan Sekarang (Rp {{ number_format($targetAmount, 0, ',', '.') }})
                                         @else
@@ -376,7 +463,7 @@
                         <div class="pt-3 border-t border-[#f2ece5] p-3 rounded-2xl bg-[#faf7f2] border border-[#ede7df] space-y-1">
                             <div class="flex items-center justify-between text-xs font-bold text-[#5b4b38]">
                                 <span>Tagihan Saat Ini:</span>
-                                <span class="font-serif-luxury text-base sm:text-lg">
+                                <span class="font-serif-luxury text-base sm:text-lg" id="summary-target-amount">
                                     Rp {{ number_format($targetAmount, 0, ',', '.') }}
                                 </span>
                             </div>
@@ -553,6 +640,107 @@
             if (renewBox) renewBox.classList.add('hidden');
 
             initCountdown();
+        }
+
+        // ==================== PARTIAL / FULL PAYMENT MODE LOGIC ====================
+        const TOTAL_REMAINING_AMOUNT = {{ (int) $targetAmount }};
+        const PAYMENT_TYPE = "{{ $paymentType }}";
+
+        function formatRupiahJs(number) {
+            return new Intl.NumberFormat('id-ID').format(number);
+        }
+
+        function handlePaymentModeChange(mode) {
+            const partialSection = document.getElementById('partial-amount-section');
+            const customAmountHidden = document.getElementById('custom_amount');
+            const btnText = document.getElementById('btn-submit-text');
+            const summaryTarget = document.getElementById('summary-target-amount');
+            const optFull = document.getElementById('opt-full-label');
+            const optPartial = document.getElementById('opt-partial-label');
+
+            if (mode === 'full') {
+                if (partialSection) partialSection.classList.add('hidden');
+                if (customAmountHidden) customAmountHidden.value = TOTAL_REMAINING_AMOUNT;
+                if (btnText) btnText.textContent = `Bayar Pelunasan Sekarang (Rp ${formatRupiahJs(TOTAL_REMAINING_AMOUNT)})`;
+                if (summaryTarget) summaryTarget.textContent = `Rp ${formatRupiahJs(TOTAL_REMAINING_AMOUNT)}`;
+
+                if (optFull) {
+                    optFull.classList.add('border-2', 'border-[#5b4b38]', 'bg-[#faf7f2]');
+                    optFull.classList.remove('border-[#ede7df]', 'bg-white');
+                }
+                if (optPartial) {
+                    optPartial.classList.remove('border-2', 'border-[#5b4b38]', 'bg-[#faf7f2]');
+                    optPartial.classList.add('border-[#ede7df]', 'bg-white');
+                }
+            } else {
+                if (partialSection) partialSection.classList.remove('hidden');
+                if (optFull) {
+                    optFull.classList.remove('border-2', 'border-[#5b4b38]', 'bg-[#faf7f2]');
+                    optFull.classList.add('border-[#ede7df]', 'bg-white');
+                }
+                if (optPartial) {
+                    optPartial.classList.add('border-2', 'border-[#5b4b38]', 'bg-[#faf7f2]');
+                    optPartial.classList.remove('border-[#ede7df]', 'bg-white');
+                }
+
+                // If input is empty, default to half
+                const inputEl = document.getElementById('custom_amount_display');
+                if (inputEl && !inputEl.value) {
+                    setPresetFraction(0.5);
+                } else if (inputEl) {
+                    handleCustomAmountInput(inputEl.value);
+                }
+            }
+        }
+
+        function setPresetFraction(fraction) {
+            const nominal = Math.round(TOTAL_REMAINING_AMOUNT * fraction);
+            const inputEl = document.getElementById('custom_amount_display');
+            if (inputEl) {
+                inputEl.value = formatRupiahJs(nominal);
+                handleCustomAmountInput(inputEl.value);
+            }
+        }
+
+        function handleCustomAmountInput(val) {
+            const raw = parseInt(String(val).replace(/[^0-9]/g, '') || '0', 10);
+            const clamped = Math.min(Math.max(0, raw), TOTAL_REMAINING_AMOUNT);
+            const customAmountHidden = document.getElementById('custom_amount');
+            if (customAmountHidden) customAmountHidden.value = clamped;
+
+            const inputEl = document.getElementById('custom_amount_display');
+            if (inputEl && val) {
+                inputEl.value = formatRupiahJs(clamped);
+            }
+
+            const previewPay = document.getElementById('preview-pay-now');
+            const previewRemaining = document.getElementById('preview-remaining-after');
+            const remainingAfter = Math.max(0, TOTAL_REMAINING_AMOUNT - clamped);
+
+            if (previewPay) previewPay.textContent = `Rp ${formatRupiahJs(clamped)}`;
+            if (previewRemaining) {
+                previewRemaining.textContent = `Rp ${formatRupiahJs(remainingAfter)}`;
+                if (remainingAfter === 0) {
+                    previewRemaining.className = 'text-emerald-700 text-sm font-bold';
+                    previewRemaining.textContent = 'Rp 0 (Lunas Sepenuhnya)';
+                } else {
+                    previewRemaining.className = 'text-rose-700 text-sm font-bold';
+                }
+            }
+
+            const btnText = document.getElementById('btn-submit-text');
+            if (btnText) {
+                if (clamped >= TOTAL_REMAINING_AMOUNT) {
+                    btnText.textContent = `Bayar Pelunasan Sekarang (Rp ${formatRupiahJs(clamped)})`;
+                } else {
+                    btnText.textContent = `Bayar Sisa Cicilan Sekarang (Rp ${formatRupiahJs(clamped)})`;
+                }
+            }
+
+            const summaryTarget = document.getElementById('summary-target-amount');
+            if (summaryTarget) {
+                summaryTarget.textContent = `Rp ${formatRupiahJs(clamped)}`;
+            }
         }
 
         // Initialize countdown on DOM load

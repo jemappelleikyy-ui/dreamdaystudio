@@ -55,12 +55,16 @@
 
     @php
         $st = strtoupper(trim($booking['status'] ?? 'MENUNGGU PEMBAYARAN DP'));
+        $pst = strtoupper(trim($booking['payment_status'] ?? ''));
         $total = (int) ($booking['total_price'] ?? 0);
         $dpPct = (int) ($booking['dp_percentage'] ?? 30);
         $dpAmount = (int) ($booking['dp_amount'] ?? round($total * $dpPct / 100));
         $amountPaid = (int) ($booking['amount_paid'] ?? 0);
         $remaining = (int) ($booking['remaining_amount'] ?? max(0, $total - $amountPaid));
-        $isLunas = in_array($st, ['LUNAS', 'SELESAI', 'TERVERIFIKASI', 'COMPLETED']) || $remaining == 0;
+        $isLunas = in_array($st, ['LUNAS', 'SELESAI', 'TERVERIFIKASI', 'COMPLETED']) || $pst === 'LUNAS' || $remaining == 0;
+        $isDPPaid = ($amountPaid >= $dpAmount) || in_array($st, ['DP DIBAYAR', 'BOOKING AKTIF']) || in_array($pst, ['DP DIBAYAR']);
+        $isWaitingVerify = in_array($pst, ['MENUNGGU VERIFIKASI', 'MENUNGGU VERIFIKASI DP', 'MENUNGGU VERIFIKASI PELUNASAN']) || in_array($st, ['MENUNGGU VERIFIKASI DP', 'MENUNGGU VERIFIKASI PELUNASAN']);
+        $paymentsList = $booking['payments'] ?? [];
     @endphp
 
     <!-- ==================== MAIN INVOICE & NOTIFICATION ==================== -->
@@ -80,29 +84,41 @@
                 <p class="text-xs sm:text-sm text-[#685f58] max-w-md mx-auto">
                     Terima kasih, seluruh tagihan acara Anda telah lunas. Notifikasi konfirmasi dan tanda terima resmi telah dikirimkan ke email Anda.
                 </p>
-            @elseif($st === 'DP DIBAYAR')
+            @elseif($isWaitingVerify && $isDPPaid)
+                <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-md animate-pulse">
+                    <svg class="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h1 class="font-serif-luxury text-3xl sm:text-4xl font-bold text-[#27221e] tracking-tight">
+                    Pembayaran Sisa Sedang Diverifikasi
+                </h1>
+                <p class="text-xs sm:text-sm text-[#685f58] max-w-md mx-auto">
+                    Bukti pembayaran sisa tagihan Anda telah kami terima dan sedang diverifikasi oleh tim administrasi. DP sebelumnya telah berhasil diterima dan jadwal acara tetap aman terkunci.
+                </p>
+            @elseif($isDPPaid)
                 <div class="w-16 h-16 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center mx-auto shadow-md">
                     <svg class="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 </div>
                 <h1 class="font-serif-luxury text-3xl sm:text-4xl font-bold text-[#27221e] tracking-tight">
-                    Pembayaran DP Berhasil Diverifikasi!
+                    DP Terbayar &amp; Jadwal Terkunci!
                 </h1>
                 <p class="text-xs sm:text-sm text-[#685f58] max-w-md mx-auto">
-                    Jadwal acara pernikahan Anda telah resmi terkunci di sistem kami. Anda dapat melakukan pembayaran pelunasan kapan saja sebelum hari H.
+                    Pembayaran uang muka (DP) sebesar <strong>Rp {{ number_format($dpAmount, 0, ',', '.') }}</strong> telah kami terima. Jadwal acara pernikahan Anda telah resmi dikunci di sistem DreamDay Studio.
                 </p>
-            @elseif(in_array($st, ['MENUNGGU VERIFIKASI DP', 'MENUNGGU VERIFIKASI PELUNASAN']))
-                <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-md">
+            @elseif($isWaitingVerify)
+                <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-md animate-pulse">
                     <svg class="w-9 h-9" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 </div>
                 <h1 class="font-serif-luxury text-3xl sm:text-4xl font-bold text-[#27221e] tracking-tight">
-                    Pembayaran Sedang Dalam Verifikasi
+                    Pembayaran DP Sedang Dalam Verifikasi
                 </h1>
                 <p class="text-xs sm:text-sm text-[#685f58] max-w-md mx-auto">
-                    Bukti pembayaran Anda telah kami terima dan sedang diverifikasi oleh tim administrasi DreamDay Studio.
+                    Bukti pembayaran DP Anda telah kami terima dan sedang diverifikasi oleh tim administrasi DreamDay Studio.
                 </p>
             @else
                 <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-md">
@@ -135,13 +151,21 @@
                         <span class="inline-flex items-center px-3 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
                             COMPLETED / LUNAS
                         </span>
-                    @elseif($st === 'DP DIBAYAR')
+                    @elseif($isWaitingVerify && $isDPPaid)
+                        <span class="inline-flex items-center px-3 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                            DP TERBAYAR (VERIFIKASI SISA)
+                        </span>
+                    @elseif($isDPPaid)
                         <span class="inline-flex items-center px-3 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider bg-teal-100 text-teal-800 border border-teal-200">
-                            DP DIBAYAR (AKTIF)
+                            DP TERBAYAR (JADWAL TERKUNCI)
+                        </span>
+                    @elseif($isWaitingVerify)
+                        <span class="inline-flex items-center px-3 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                            MENUNGGU VERIFIKASI DP
                         </span>
                     @else
-                        <span class="inline-flex items-center px-3 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
-                            {{ $st }}
+                        <span class="inline-flex items-center px-3 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider bg-sky-100 text-sky-800 border border-sky-200">
+                            MENUNGGU PEMBAYARAN DP
                         </span>
                     @endif
                 </div>
@@ -206,6 +230,91 @@
                 @endif
             </div>
 
+            <!-- Rincian Transaksi & Riwayat Pembayaran -->
+            <div class="space-y-3 pt-4 border-t border-[#f2ece5]">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-[0.7rem] font-bold uppercase tracking-wider text-[#8d8277]">Rincian &amp; Riwayat Transaksi Pembayaran</h4>
+                    <span class="text-[0.7rem] font-semibold text-[#5b4b38]">
+                        {{ count($paymentsList) > 0 ? count($paymentsList) . ' Transaksi Tercatat' : '1 Transaksi (DP)' }}
+                    </span>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-[#ede7df]">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-[#faf8f5] text-[#8d8277] uppercase text-[0.65rem] border-b border-[#ede7df]">
+                            <tr>
+                                <th class="py-2.5 px-3.5">Tahap Pembayaran</th>
+                                <th class="py-2.5 px-3.5">Tanggal / Waktu</th>
+                                <th class="py-2.5 px-3.5">Metode</th>
+                                <th class="py-2.5 px-3.5 text-right">Nominal</th>
+                                <th class="py-2.5 px-3.5 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[#f2ece5]">
+                            @if(!empty($paymentsList) && count($paymentsList) > 0)
+                                @foreach($paymentsList as $idx => $pm)
+                                    @php
+                                        $pmType = strtolower($pm['payment_type'] ?? 'dp');
+                                        $pmSt = strtoupper($pm['status'] ?? 'MENUNGGU VERIFIKASI');
+                                        $labelTahap = match($pmType) {
+                                            'dp' => 'DP (' . $dpPct . '%)',
+                                            'pelunasan' => 'Sisa Tagihan / Pelunasan',
+                                            'cicilan', 'sisa' => 'Sisa Tagihan (Cicilan #' . ($idx + 1) . ')',
+                                            default => 'Pembayaran ' . ucfirst($pmType)
+                                        };
+                                        $statusClass = match($pmSt) {
+                                            'TERVERIFIKASI' => 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                                            'MENUNGGU VERIFIKASI' => 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse',
+                                            'DITOLAK' => 'bg-rose-50 text-rose-800 border-rose-200',
+                                            default => 'bg-gray-50 text-gray-700 border-gray-200'
+                                        };
+                                    @endphp
+                                    <tr class="hover:bg-[#fcfaf7]">
+                                        <td class="py-3 px-3.5 font-semibold text-[#27221e]">
+                                            {{ $labelTahap }}
+                                        </td>
+                                        <td class="py-3 px-3.5 text-[#685f58]">
+                                            {{ !empty($pm['paid_at']) ? date('d M Y, H:i', strtotime($pm['paid_at'])) : (!empty($pm['created_at']) ? date('d M Y, H:i', strtotime($pm['created_at'])) : '-') }} WIB
+                                        </td>
+                                        <td class="py-3 px-3.5 text-[#685f58]">
+                                            {{ $pm['payment_method'] ?? ($booking['payment_method'] ?? 'QRIS Instant') }}
+                                        </td>
+                                        <td class="py-3 px-3.5 text-right font-mono font-bold text-[#27221e]">
+                                            Rp {{ number_format($pm['amount'] ?? 0, 0, ',', '.') }}
+                                        </td>
+                                        <td class="py-3 px-3.5 text-center">
+                                            <span class="inline-block px-2 py-0.5 rounded-full text-[0.6rem] font-bold uppercase tracking-wider border {{ $statusClass }}">
+                                                {{ $pmSt }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            @else
+                                <tr class="hover:bg-[#fcfaf7]">
+                                    <td class="py-3 px-3.5 font-semibold text-[#27221e]">
+                                        DP ({{ $dpPct }}%)
+                                    </td>
+                                    <td class="py-3 px-3.5 text-[#685f58]">
+                                        {{ $booking['created_at'] ?? date('d M Y, H:i') }} WIB
+                                    </td>
+                                    <td class="py-3 px-3.5 text-[#685f58]">
+                                        {{ $booking['payment_method'] ?? 'QRIS Instant' }}
+                                    </td>
+                                    <td class="py-3 px-3.5 text-right font-mono font-bold text-[#27221e]">
+                                        Rp {{ number_format($amountPaid > 0 ? $amountPaid : $dpAmount, 0, ',', '.') }}
+                                    </td>
+                                    <td class="py-3 px-3.5 text-center">
+                                        <span class="inline-block px-2 py-0.5 rounded-full text-[0.6rem] font-bold uppercase tracking-wider border {{ $isDPPaid ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-300' }}">
+                                            {{ $isDPPaid ? 'TERVERIFIKASI' : 'MENUNGGU PEMBAYARAN' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @endif
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- DP & Pricing Breakdown Total -->
             <div class="space-y-2.5 pt-4 border-t border-[#f2ece5] text-xs text-[#685f58]">
                 <div class="flex items-center justify-between">
@@ -228,11 +337,21 @@
                         <span>Rp {{ number_format($dpAmount, 0, ',', '.') }}</span>
                     </div>
                     <div class="flex items-center justify-between text-xs text-emerald-700 font-semibold">
-                        <span>Total Pembayaran Telah Diterima (DP / Cicilan)</span>
+                        <span>DP Telah Dibayar</span>
+                        <span>Rp {{ number_format($dpAmount, 0, ',', '.') }}</span>
+                    </div>
+                    @if($amountPaid > $dpAmount)
+                        <div class="flex items-center justify-between text-xs text-emerald-700 font-semibold">
+                            <span>Sisa Pembayaran yang Telah Diterima</span>
+                            <span>Rp {{ number_format($amountPaid - $dpAmount, 0, ',', '.') }}</span>
+                        </div>
+                    @endif
+                    <div class="flex items-center justify-between text-xs font-bold text-[#27221e] pt-1 border-t border-[#ede7df]">
+                        <span>Total Pembayaran Masuk (DP + Cicilan)</span>
                         <span>Rp {{ number_format($amountPaid, 0, ',', '.') }}</span>
                     </div>
-                    <div class="pt-2 border-t border-[#e8dfd3] flex items-center justify-between text-sm sm:text-base font-bold {{ $remaining == 0 ? 'text-emerald-700' : 'text-[#5b4b38]' }}">
-                        <span>Sisa Pembayaran (Pelunasan)</span>
+                    <div class="pt-2 border-t border-[#e8dfd3] flex items-center justify-between text-sm sm:text-base font-bold {{ $remaining == 0 ? 'text-emerald-700' : 'text-rose-700' }}">
+                        <span>Sisa Tagihan yang Masih Ada</span>
                         <span class="font-serif-luxury text-lg sm:text-xl">
                             Rp {{ number_format($remaining, 0, ',', '.') }}
                         </span>
@@ -250,12 +369,12 @@
 
         <!-- Action Buttons (No Print) -->
         <div class="flex flex-col sm:flex-row items-center justify-center gap-4 no-print pt-2">
-            @if(!$isLunas && $st === 'DP DIBAYAR')
+            @if(!$isLunas && $isDPPaid)
                 <a href="{{ route('booking.payment', ['id' => $booking['id'], 'type' => 'pelunasan']) }}" 
                    class="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm text-center shadow-md transition duration-200 cursor-pointer">
-                    Bayar Pelunasan Sekarang (Rp {{ number_format($remaining, 0, ',', '.') }}) →
+                    Bayar Sisa Tagihan (Rp {{ number_format($remaining, 0, ',', '.') }}) →
                 </a>
-            @elseif(in_array($st, ['MENUNGGU PEMBAYARAN DP', 'DP DITOLAK']))
+            @elseif(!$isDPPaid && in_array($st, ['MENUNGGU PEMBAYARAN DP', 'DP DITOLAK', 'BOOKING DIKONFIRMASI']))
                 <a href="{{ route('booking.payment', ['id' => $booking['id']]) }}" 
                    class="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-[#5b4b38] hover:bg-[#483b2c] text-white font-bold text-xs sm:text-sm text-center shadow-md transition duration-200 cursor-pointer">
                     Bayar DP Sekarang (Rp {{ number_format($dpAmount, 0, ',', '.') }}) →

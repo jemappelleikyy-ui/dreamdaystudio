@@ -181,10 +181,15 @@
                         @foreach($messages as $msg)
                             @php
                                 $msgDate = $msg['date_label'] ?? 'Hari Ini';
+                                if (strtolower(trim($msgDate)) === 'hari ini') {
+                                    $msgDate = 'Hari Ini';
+                                } elseif (strtolower(trim($msgDate)) === 'kemarin') {
+                                    $msgDate = 'Kemarin';
+                                }
                             @endphp
 
                             <!-- Minimal WhatsApp Date Divider Chip -->
-                            @if($msgDate !== $lastDateLabel)
+                            @if(is_null($lastDateLabel) || strcasecmp(trim($msgDate), trim((string)$lastDateLabel)) !== 0)
                                 <div class="flex items-center justify-center my-1.5">
                                     <span class="bg-[#ede7df] text-[#73685e] text-[9.5px] font-medium tracking-normal px-2.5 py-0.5 rounded-md shadow-2xs">
                                         {{ $msgDate }}
@@ -345,8 +350,16 @@
             let lastDate = null;
 
             messages.forEach(msg => {
-                const msgDate = msg.date_label || 'Hari Ini';
-                if (msgDate !== lastDate) {
+                let msgDate = msg.date_label || 'Hari Ini';
+                if (msgDate.toLowerCase().trim() === 'hari ini') {
+                    msgDate = 'Hari Ini';
+                } else if (msgDate.toLowerCase().trim() === 'kemarin') {
+                    msgDate = 'Kemarin';
+                }
+                const normDate = msgDate.toLowerCase().trim();
+                const prevNormDate = lastDate ? lastDate.toLowerCase().trim() : null;
+
+                if (!lastDate || normDate !== prevNormDate) {
                     html += `
                         <div class="flex items-center justify-center my-1.5">
                             <span class="bg-[#ede7df] text-[#73685e] text-[9.5px] font-medium tracking-normal px-2.5 py-0.5 rounded-md shadow-2xs">

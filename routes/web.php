@@ -123,10 +123,38 @@ function format_booking_dp_data($b) {
     if ($dpPct <= 0) $dpPct = 30;
     $dpAmount = (int) ($arr['dp_amount'] ?? round($total * $dpPct / 100));
 
+    // Preserve and resolve payments list if available
+    $paymentsList = [];
+    if (is_object($b) && isset($b->payments)) {
+        $paymentsList = method_exists($b->payments, 'toArray') ? $b->payments->toArray() : (array) $b->payments;
+    } elseif (!empty($arr['payments']) && is_array($arr['payments'])) {
+        $paymentsList = $arr['payments'];
+    }
+
     $rawStatus = trim($arr['status'] ?? 'Menunggu Konfirmasi Admin');
     $rawPaymentStatus = trim($arr['payment_status'] ?? 'Belum Dibayar');
     $stUpper = strtoupper($rawStatus);
     $pstUpper = strtoupper($rawPaymentStatus);
+
+    $amountPaid = (int) ($arr['amount_paid'] ?? 0);
+    $hasPendingPayment = false;
+    $hasVerifiedPayment = false;
+
+    if (!empty($paymentsList)) {
+        $verifiedSum = 0;
+        foreach ($paymentsList as $pm) {
+            $pmSt = strtoupper(trim($pm['status'] ?? ''));
+            if ($pmSt === 'TERVERIFIKASI') {
+                $verifiedSum += (int) ($pm['amount'] ?? 0);
+                $hasVerifiedPayment = true;
+            } elseif ($pmSt === 'MENUNGGU VERIFIKASI') {
+                $hasPendingPayment = true;
+            }
+        }
+        if ($hasVerifiedPayment) {
+            $amountPaid = $verifiedSum;
+        }
+    }
 
     $status = 'Menunggu Konfirmasi Admin';
     $paymentStatus = 'Belum Dibayar';
@@ -136,7 +164,7 @@ function format_booking_dp_data($b) {
         $paymentStatus = 'Belum Dibayar';
     } elseif ($stUpper === 'BOOKING DIKONFIRMASI' || $stUpper === 'MENUNGGU PEMBAYARAN DP') {
         $status = 'Booking Dikonfirmasi';
-        if ($pstUpper === 'MENUNGGU VERIFIKASI' || $pstUpper === 'MENUNGGU VERIFIKASI DP') {
+        if ($pstUpper === 'MENUNGGU VERIFIKASI' || $pstUpper === 'MENUNGGU VERIFIKASI DP' || $hasPendingPayment) {
             $paymentStatus = 'Menunggu Verifikasi';
         } elseif ($pstUpper === 'PEMBAYARAN DITOLAK' || $pstUpper === 'DP DITOLAK') {
             $paymentStatus = 'Pembayaran Ditolak';
@@ -147,14 +175,23 @@ function format_booking_dp_data($b) {
             $paymentStatus = 'Menunggu Pembayaran DP';
         }
     } elseif ($stUpper === 'MENUNGGU VERIFIKASI DP' || $stUpper === 'MENUNGGU VERIFIKASI' || $stUpper === 'VERIFIKASI') {
-        $status = 'Booking Dikonfirmasi';
-        $paymentStatus = 'Menunggu Verifikasi';
+        if ($amountPaid >= $dpAmount) {
+            $status = 'Booking Aktif';
+            $paymentStatus = 'Menunggu Verifikasi';
+        } else {
+            $status = 'Booking Dikonfirmasi';
+            $paymentStatus = 'Menunggu Verifikasi';
+        }
     } elseif ($stUpper === 'DP DIBAYAR' || $stUpper === 'BOOKING AKTIF' || $stUpper === 'BOOKING AKTIF / DIKONFIRMASI' || $pstUpper === 'DP DIBAYAR') {
         $status = 'Booking Aktif';
-        $paymentStatus = 'DP Dibayar';
+        if ($pstUpper === 'MENUNGGU VERIFIKASI' || $hasPendingPayment) {
+            $paymentStatus = 'Menunggu Verifikasi';
+        } else {
+            $paymentStatus = 'DP Dibayar';
+        }
     } elseif ($stUpper === 'LUNAS' || $stUpper === 'SELESAI' || $stUpper === 'TERVERIFIKASI' || $stUpper === 'COMPLETED' || $pstUpper === 'LUNAS') {
         $status = 'Selesai';
-        $paymentStatus = 'DP Dibayar';
+        $paymentStatus = 'Lunas';
     } elseif ($stUpper === 'DIBATALKAN' || $stUpper === 'CANCELLED' || $pstUpper === 'KADALUARSA') {
         $status = 'Dibatalkan';
         $paymentStatus = ($pstUpper === 'KADALUARSA') ? 'Kadaluarsa' : ($rawPaymentStatus ?: 'Dibatalkan');
@@ -163,7 +200,6 @@ function format_booking_dp_data($b) {
         $paymentStatus = $rawPaymentStatus;
     }
 
-    $amountPaid = (int) ($arr['amount_paid'] ?? 0);
     if ($amountPaid === 0) {
         if (in_array($status, ['Selesai', 'Lunas', 'TERVERIFIKASI', 'COMPLETED']) || $paymentStatus === 'Lunas') {
             $amountPaid = $total;
@@ -171,6 +207,12 @@ function format_booking_dp_data($b) {
             $amountPaid = $dpAmount;
         }
     }
+
+    if ($amountPaid >= $total && $total > 0) {
+        $status = 'Selesai';
+        $paymentStatus = 'Lunas';
+    }
+
     $remaining = max(0, $total - $amountPaid);
 
     // Calculate Expiry Countdown from expires_at
@@ -216,6 +258,8 @@ function format_booking_dp_data($b) {
             }
         } catch (\Throwable $e) {}
     }
+
+    $arr['payments'] = $paymentsList;
 
     $arr['dp_percentage'] = $dpPct;
     $arr['dp_amount'] = $dpAmount;
@@ -2247,8 +2291,14 @@ Route::post('/booking/payment/{id}/pay', function ($id) {
         $amount = $dpAmount;
         $newBookingStatus = 'Booking Dikonfirmasi';
         $newPaymentStatus = 'Menunggu Verifikasi';
-    } else { // Pelunasan
-        $amount = $remainingAmount > 0 ? $remainingAmount : ($totalPrice - $dpAmount);
+    } else { // Pelunasan / Pembayaran Sisa
+        $customAmount = (int) preg_replace('/[^0-9]/', '', request('custom_amount', ''));
+        $maxPayable = $remainingAmount > 0 ? $remainingAmount : ($totalPrice - $dpAmount);
+        if ($customAmount > 0) {
+            $amount = min($customAmount, $maxPayable);
+        } else {
+            $amount = $maxPayable;
+        }
         $newBookingStatus = 'Booking Aktif';
         $newPaymentStatus = 'Menunggu Verifikasi';
     }
@@ -2699,7 +2749,7 @@ function format_chat_datetime_helper($dateTime) {
         return [
             'time' => date('H:i', $now),
             'date_raw' => date('Y-m-d', $now),
-            'date_label' => 'HARI INI',
+            'date_label' => 'Hari Ini',
             'time_full' => date('H:i', $now) . ' WIB',
         ];
     }
@@ -2853,7 +2903,7 @@ function get_admin_chat_conversations() {
                 'message' => 'Halo Admin DreamDay Studio, saya tertarik untuk konsultasi paket The Glasshouse Ballroom untuk pernikahan tahun depan.',
                 'time' => '10:15',
                 'date_raw' => $todayDt['date_raw'],
-                'date_label' => 'HARI INI',
+                'date_label' => 'Hari Ini',
                 'is_read' => true,
             ],
             [
@@ -2863,7 +2913,7 @@ function get_admin_chat_conversations() {
                 'message' => 'Halo Kak Sekar Ayu! Senang sekali bisa membantu. Untuk The Glasshouse Grand Ballroom kapasitas hingga 800 tamu dengan fasilitas full chandelier dan bridal suite.',
                 'time' => '10:18',
                 'date_raw' => $todayDt['date_raw'],
-                'date_label' => 'HARI INI',
+                'date_label' => 'Hari Ini',
                 'is_read' => true,
             ]
         ]);
@@ -2876,7 +2926,7 @@ function get_admin_chat_conversations() {
             'unread_count' => 0,
             'last_message' => end($defaultMsgs)['message'] ?? '',
             'last_time' => end($defaultMsgs)['time'] ?? '10:18',
-            'last_date_label' => 'HARI INI',
+            'last_date_label' => 'Hari Ini',
             'last_sender' => end($defaultMsgs)['sender'] ?? 'admin',
             'updated_at' => time(),
             'messages' => $defaultMsgs,
@@ -3017,7 +3067,8 @@ Route::post('/admin/categories/create', function () {
     if (request()->wantsJson() || request()->ajax()) {
         return response()->json(['success' => true, 'message' => 'Kategori "' . $name . '" berhasil ditambahkan ke database!']);
     }
-    return redirect()->route('admin.dashboard')->with('success_message', 'Kategori "' . $name . '" berhasil ditambahkan ke database!');
+    session()->flash('open_categories', true);
+    return redirect()->route('admin.dashboard', ['tab' => 'categories'])->with('success_message', 'Kategori "' . $name . '" berhasil ditambahkan ke database!');
 })->name('admin.categories.create');
 
 Route::post('/admin/categories/{id}/update', function ($id) {
@@ -3070,7 +3121,8 @@ Route::post('/admin/categories/{id}/update', function ($id) {
     if (request()->wantsJson() || request()->ajax()) {
         return response()->json(['success' => true, 'message' => 'Kategori "' . $name . '" berhasil diperbarui!']);
     }
-    return redirect()->route('admin.dashboard')->with('success_message', 'Kategori "' . $name . '" berhasil diperbarui!');
+    session()->flash('open_categories', true);
+    return redirect()->route('admin.dashboard', ['tab' => 'categories'])->with('success_message', 'Kategori "' . $name . '" berhasil diperbarui!');
 })->name('admin.categories.update');
 
 Route::post('/admin/categories/{id}/delete', function ($id) {
@@ -3094,7 +3146,8 @@ Route::post('/admin/categories/{id}/delete', function ($id) {
     if (request()->wantsJson() || request()->ajax()) {
         return response()->json(['success' => true, 'message' => $msg]);
     }
-    return redirect()->route('admin.dashboard')->with('success_message', $msg);
+    session()->flash('open_categories', true);
+    return redirect()->route('admin.dashboard', ['tab' => 'categories'])->with('success_message', $msg);
 })->name('admin.categories.delete');
 
 Route::post('/admin/categories/{id}/toggle-status', function ($id) {
@@ -3106,7 +3159,8 @@ Route::post('/admin/categories/{id}/toggle-status', function ($id) {
     $category->save();
 
     $stateText = $category->is_active ? 'diaktifkan' : 'dinonaktifkan';
-    return redirect()->route('admin.dashboard')->with('success_message', 'Status kategori "' . $category->name . '" berhasil ' . $stateText . '.');
+    session()->flash('open_categories', true);
+    return redirect()->route('admin.dashboard', ['tab' => 'categories'])->with('success_message', 'Status kategori "' . $category->name . '" berhasil ' . $stateText . '.');
 })->name('admin.categories.toggle_status');
 
 // Service / Product Management Routes
@@ -3156,7 +3210,8 @@ Route::post('/admin/services/create', function () {
     if (request()->wantsJson() || request()->ajax()) {
         return response()->json(['success' => true, 'message' => 'Produk/layanan "' . $title . '" berhasil ditambahkan!']);
     }
-    return redirect()->route('admin.dashboard')->with('success_message', 'Produk/layanan "' . $title . '" berhasil ditambahkan ke kategori ' . $category . '!');
+    session()->flash('open_categories', true);
+    return redirect()->route('admin.dashboard', ['tab' => 'categories'])->with('success_message', 'Produk/layanan "' . $title . '" berhasil ditambahkan ke kategori ' . $category . '!');
 })->name('admin.services.create');
 
 Route::post('/admin/services/{id}/update', function ($id) {
@@ -3200,7 +3255,8 @@ Route::post('/admin/services/{id}/update', function ($id) {
     if (request()->wantsJson() || request()->ajax()) {
         return response()->json(['success' => true, 'message' => 'Produk/layanan "' . $title . '" berhasil diperbarui!']);
     }
-    return redirect()->route('admin.dashboard')->with('success_message', 'Produk/layanan "' . $title . '" berhasil diperbarui!');
+    session()->flash('open_categories', true);
+    return redirect()->route('admin.dashboard', ['tab' => 'categories'])->with('success_message', 'Produk/layanan "' . $title . '" berhasil diperbarui!');
 })->name('admin.services.update');
 
 Route::post('/admin/services/{id}/delete', function ($id) {
@@ -3214,7 +3270,8 @@ Route::post('/admin/services/{id}/delete', function ($id) {
     if (request()->wantsJson() || request()->ajax()) {
         return response()->json(['success' => true, 'message' => 'Produk/layanan "' . $title . '" berhasil dihapus!']);
     }
-    return redirect()->route('admin.dashboard')->with('success_message', 'Produk/layanan "' . $title . '" berhasil dihapus!');
+    session()->flash('open_categories', true);
+    return redirect()->route('admin.dashboard', ['tab' => 'categories'])->with('success_message', 'Produk/layanan "' . $title . '" berhasil dihapus!');
 })->name('admin.services.delete');
 
 // Admin Update DP Settings
@@ -3359,9 +3416,10 @@ Route::post('/admin/booking/verify-payment', function () {
 
     $bookingId = request('booking_id');
     $action = request('action'); // 'accept_dp', 'reject_dp', 'accept_pelunasan', 'reject_pelunasan'
+    $paymentId = request('payment_id');
     $notes = request('notes', '');
 
-    $booking = Booking::find($bookingId);
+    $booking = Booking::with('payments')->find($bookingId);
     if (!$booking) {
         return response()->json(['success' => false, 'message' => 'Booking #' . $bookingId . ' tidak ditemukan.'], 404);
     }
@@ -3370,55 +3428,74 @@ Route::post('/admin/booking/verify-payment', function () {
     $dpPercentage = (int) ($booking->dp_percentage ?: get_system_dp_percentage());
     $dpAmount = (int) ($booking->dp_amount ?: round($totalPrice * $dpPercentage / 100));
 
-    $newBookingStatus = 'Booking Aktif';
-    $newPaymentStatus = 'DP Dibayar';
-    $amountPaid = 0;
-    $remainingAmount = $totalPrice;
-
-    if ($action === 'accept_dp') {
-        $newBookingStatus = 'Booking Aktif';
-        $newPaymentStatus = 'DP Dibayar';
-        $amountPaid = $dpAmount;
-        $remainingAmount = max(0, $totalPrice - $dpAmount);
-        try {
+    // Handle individual payment verification if payment_id is provided
+    if ($paymentId) {
+        $singlePayment = Payment::where('booking_id', $bookingId)->find($paymentId);
+        if ($singlePayment) {
+            if ($action === 'accept_payment' || $action === 'accept_dp' || $action === 'accept_pelunasan') {
+                $singlePayment->update([
+                    'status' => 'TERVERIFIKASI',
+                    'verified_at' => now(),
+                ]);
+            } elseif ($action === 'reject_payment' || $action === 'reject_dp' || $action === 'reject_pelunasan') {
+                $singlePayment->update([
+                    'status' => 'DITOLAK',
+                    'notes' => $notes ?: 'Pembayaran ditolak oleh Admin.',
+                ]);
+            }
+        }
+    } else {
+        if ($action === 'accept_dp') {
             Payment::where('booking_id', $bookingId)->where('payment_type', 'dp')->update([
                 'status' => 'TERVERIFIKASI',
                 'verified_at' => now(),
             ]);
-        } catch (\Throwable $e) {}
-    } elseif ($action === 'reject_dp') {
-        $newBookingStatus = 'Booking Dikonfirmasi';
-        $newPaymentStatus = 'Pembayaran Ditolak';
-        $amountPaid = 0;
-        $remainingAmount = $totalPrice;
-        try {
+        } elseif ($action === 'reject_dp') {
             Payment::where('booking_id', $bookingId)->where('payment_type', 'dp')->update([
                 'status' => 'DITOLAK',
                 'notes' => $notes ?: 'Pembayaran DP ditolak oleh Admin.',
             ]);
-        } catch (\Throwable $e) {}
-    } elseif ($action === 'accept_pelunasan') {
-        $newBookingStatus = 'Selesai';
-        $newPaymentStatus = 'DP Dibayar';
-        $amountPaid = $totalPrice;
-        $remainingAmount = 0;
-        try {
-            Payment::where('booking_id', $bookingId)->where('payment_type', 'pelunasan')->update([
+        } elseif ($action === 'accept_pelunasan') {
+            Payment::where('booking_id', $bookingId)->whereIn('payment_type', ['pelunasan', 'cicilan', 'sisa'])->update([
                 'status' => 'TERVERIFIKASI',
                 'verified_at' => now(),
             ]);
-        } catch (\Throwable $e) {}
-    } elseif ($action === 'reject_pelunasan') {
-        $newBookingStatus = 'Booking Aktif';
-        $newPaymentStatus = 'DP Dibayar';
-        $amountPaid = $dpAmount;
-        $remainingAmount = max(0, $totalPrice - $dpAmount);
-        try {
-            Payment::where('booking_id', $bookingId)->where('payment_type', 'pelunasan')->update([
+        } elseif ($action === 'reject_pelunasan') {
+            Payment::where('booking_id', $bookingId)->whereIn('payment_type', ['pelunasan', 'cicilan', 'sisa'])->update([
                 'status' => 'DITOLAK',
                 'notes' => $notes ?: 'Pembayaran pelunasan ditolak oleh Admin.',
             ]);
-        } catch (\Throwable $e) {}
+        }
+    }
+
+    // Recalculate total verified amount from all verified payments
+    $allPayments = Payment::where('booking_id', $bookingId)->get();
+    $verifiedPayments = $allPayments->where('status', 'TERVERIFIKASI');
+    $hasPending = $allPayments->where('status', 'MENUNGGU VERIFIKASI')->isNotEmpty();
+    $hasVerifiedDp = $verifiedPayments->where('payment_type', 'dp')->isNotEmpty();
+
+    $amountPaid = (int) $verifiedPayments->sum('amount');
+    if ($amountPaid === 0 && ($action === 'accept_dp' || $hasVerifiedDp)) {
+        $amountPaid = $dpAmount;
+    }
+
+    $remainingAmount = max(0, $totalPrice - $amountPaid);
+
+    if ($remainingAmount === 0 && $amountPaid >= $totalPrice) {
+        $newBookingStatus = 'Selesai';
+        $newPaymentStatus = 'Lunas';
+    } elseif ($hasPending) {
+        $newBookingStatus = ($amountPaid >= $dpAmount || $hasVerifiedDp) ? 'Booking Aktif' : 'Booking Dikonfirmasi';
+        $newPaymentStatus = 'Menunggu Verifikasi';
+    } elseif ($amountPaid >= $dpAmount || $hasVerifiedDp) {
+        $newBookingStatus = 'Booking Aktif';
+        $newPaymentStatus = 'DP Dibayar';
+    } elseif ($action === 'reject_dp') {
+        $newBookingStatus = 'Booking Dikonfirmasi';
+        $newPaymentStatus = 'Pembayaran Ditolak';
+    } else {
+        $newBookingStatus = $booking->status;
+        $newPaymentStatus = $booking->payment_status;
     }
 
     $booking->update([

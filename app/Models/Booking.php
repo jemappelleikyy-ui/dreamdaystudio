@@ -63,6 +63,6 @@ class Booking extends Model
 
     public function payments()
     {
-        return $this->hasMany(Payment::class, 'booking_id', 'id')->orderBy('created_at', 'desc');
+        return $this->hasMany(Payment::class, 'booking_id', 'id')->orderBy('id', 'asc');
     }
 }
